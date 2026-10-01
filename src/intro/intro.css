@@ -1,0 +1,128 @@
+/* 인트로 화면 — 교실 TV(1920×1080)에서 멀리서도 읽히게 크게 */
+.intro {
+  position: fixed; inset: 0; overflow: hidden;
+  background: #0b1220; color: #fff;
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  user-select: none; cursor: pointer;
+}
+.intro [hidden] { display: none !important; }
+
+/* 배경 */
+.intro-bg, .intro-bg img, .intro-bg video, .intro-opening {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+.intro-bg.kenburns img { animation: kenburns 30s ease-in-out infinite alternate; transform-origin: 50% 60%; }
+@keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.14) translateY(-1.5%); } }
+.intro-opening { z-index: 2; transition: opacity .7s; }
+.intro-opening.fade { opacity: 0; }
+.intro-shade {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 240, 200, .0) 30%, rgba(8, 14, 30, .45) 100%),
+    linear-gradient(to bottom, rgba(8, 14, 30, .15), rgba(8, 14, 30, 0) 40%, rgba(8, 14, 30, .55));
+}
+/* 임시 배경일 때만: 해에서 퍼지는 빛 */
+.intro-sun { display: none; }
+.intro.placeholder .intro-sun {
+  display: block; position: absolute; z-index: 3; pointer-events: none;
+  left: 50%; top: 28%; width: 160vmax; height: 160vmax; transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(rgba(255, 244, 200, .10) 0 6deg, transparent 6deg 18deg);
+  mask: radial-gradient(circle, #000 0, transparent 55%);
+  -webkit-mask: radial-gradient(circle, #000 0, transparent 55%);
+  animation: spin 80s linear infinite;
+}
+@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+/* 로고 */
+.intro-logo {
+  position: absolute; z-index: 5; left: 71%; top: 2.5%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  filter: drop-shadow(0 1.2vh 1.6vh rgba(0, 0, 0, .45));
+}
+.logo-small {
+  font-size: clamp(22px, 3.2vw, 64px); font-weight: 900; letter-spacing: .3em;
+  padding: .12em .9em .12em 1.2em; border-radius: 999px;
+  background: #29b6f6; color: #fff; transform: rotate(-3deg);
+  box-shadow: 0 .3em 0 #0d47a1;
+  animation: drop .6s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+.logo-big { display: flex; margin-top: .1em; }
+.logo-big span {
+  display: inline-block;
+  font-size: clamp(48px, 6.8vw, 140px); font-weight: 900; line-height: 1.05;
+  color: #ffd54f;
+  -webkit-text-stroke: .045em #1b2a4a;
+  paint-order: stroke fill;
+  text-shadow: 0 .07em 0 #e65100, 0 .12em 0 #1b2a4a;
+  animation: bounce-in .7s cubic-bezier(.3, 1.7, .5, 1) both, bob 3.2s ease-in-out infinite;
+  animation-delay: calc(.25s + var(--i) * .09s), calc(1.2s + var(--i) * .18s);
+}
+.logo-big span:nth-child(odd) { color: #fff3c4; }
+.logo-ball {
+  position: absolute; right: -9%; top: -14%; width: clamp(60px, 9vw, 180px);
+  animation: ball-in .9s cubic-bezier(.3, 1.4, .5, 1) .9s both, spin-ball 6s linear 1.8s infinite;
+}
+/* 임시 배경일 때는 로고를 가운데에, 공 아이콘도 표시 (타이틀 그림에는 공이 이미 있음) */
+.intro.placeholder .intro-logo { left: 50%; top: 11%; }
+.intro.placeholder .logo-big span { font-size: clamp(64px, 11vw, 220px); }
+.intro:not(.placeholder) .logo-ball { display: none; }
+@keyframes drop { from { opacity: 0; transform: translateY(-120%) rotate(-3deg); } }
+@keyframes bounce-in { from { opacity: 0; transform: translateY(-60%) scale(.4); } }
+@keyframes bob { 50% { transform: translateY(-4%); } }
+@keyframes ball-in { from { opacity: 0; transform: translate(200%, -150%) scale(.3); } }
+@keyframes spin-ball { to { transform: rotate(360deg); } }
+
+/* 시작 안내 */
+.intro-start {
+  position: absolute; z-index: 5; left: 50%; bottom: 5%; transform: translateX(-50%);
+  text-align: center; animation: fade-up .6s ease-out both;
+}
+.start-main {
+  font-size: clamp(28px, 4.2vw, 84px); font-weight: 900; white-space: nowrap;
+  padding: .25em 1.1em; border-radius: 999px;
+  background: rgba(8, 14, 30, .62); border: .08em solid #ffd54f;
+  text-shadow: 0 .06em .2em rgba(0, 0, 0, .7);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.start-hand { display: inline-block; animation: wave 1.1s ease-in-out infinite; transform-origin: 70% 80%; }
+.start-sub {
+  margin-top: 1.4vh; font-size: clamp(14px, 1.5vw, 30px); font-weight: bold;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .9);
+}
+.start-hold {
+  margin: 1.6vh auto 0; width: min(40vw, 640px); height: 1.4vh; border-radius: 999px;
+  background: rgba(255, 255, 255, .25); overflow: hidden; opacity: 0; transition: opacity .2s;
+}
+.start-hold.on { opacity: 1; }
+.start-hold div { height: 100%; width: 0; background: #ffd54f; }
+@keyframes fade-up { from { opacity: 0; transform: translate(-50%, 30%); } }
+@keyframes pulse { 50% { transform: scale(1.04); } }
+@keyframes wave { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(18deg); } 75% { transform: rotate(-12deg); } }
+
+.intro-sound, .intro-skip {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%);
+  font-size: clamp(14px, 1.4vw, 28px); font-weight: bold;
+  padding: .35em 1em; border-radius: 999px; background: rgba(0, 0, 0, .6);
+}
+.intro-sound { top: 3vh; }
+.intro-skip { bottom: 3vh; opacity: .8; }
+
+/* 웹캠 작은 화면 */
+.intro-pip {
+  position: absolute; z-index: 6; right: 1.5vw; bottom: 3vh; width: 18vw; aspect-ratio: 16 / 9;
+  border-radius: 1.4vh; overflow: hidden; border: .35vh solid rgba(255, 255, 255, .6); background: #000;
+}
+.intro-pip.active { border-color: #ffd54f; }
+.intro-pip canvas { width: 100%; height: 100%; display: block; }
+.intro-pip span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: .3em; text-align: center;
+  font-size: clamp(11px, 1vw, 20px); font-weight: bold; background: rgba(0, 0, 0, .55);
+}
+.intro-cam { display: none; }
+
+/* 시작할 때 번쩍 */
+.intro-flash { position: absolute; inset: 0; z-index: 9; background: #fff; opacity: 0; pointer-events: none; }
+.intro.leaving .intro-flash { animation: flash .9s ease-out forwards; }
+.intro.leaving .intro-logo { animation: zoom-out .9s ease-in forwards; }
+@keyframes flash { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 1; } }
+@keyframes zoom-out { to { transform: translateX(-50%) scale(1.6); opacity: 0; } }

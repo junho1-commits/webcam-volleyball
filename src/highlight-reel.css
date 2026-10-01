@@ -1,0 +1,44 @@
+/* 하이라이트 사진첩 (src/highlight-reel.js, Claude 담당) */
+.hl-reel {
+  display: flex; flex-direction: column; align-items: center; gap: 1.2vh;
+  width: min(92vw, 760px); padding: 1.6vh 1.4vw 1.8vh;
+  border-radius: 1.2em; background: rgba(255, 255, 255, .08);
+}
+.hl-head { display: flex; flex-direction: column; gap: .2em; }
+.hl-head b { font-size: clamp(18px, 1.9vw, 34px); }
+.hl-head small { font-size: clamp(11px, .9vw, 16px); color: #b9e4ff; }
+
+.hl-stage {
+  position: relative; width: min(80vw, 560px); aspect-ratio: 16 / 9;
+  padding: .7vh; background: #fff; border-radius: .4em;
+  box-shadow: 0 1vh 3vh rgba(0, 0, 0, .45);
+  transform: rotate(-1.5deg);
+}
+.hl-stage.flip { animation: hl-flip .45s ease-out; }
+@keyframes hl-flip {
+  from { transform: rotate(3deg) scale(.9); opacity: .2; }
+  to { transform: rotate(-1.5deg) scale(1); opacity: 1; }
+}
+.hl-stage canvas { display: block; width: 100%; height: 100%; border-radius: .2em; background: #111; }
+.hl-label {
+  position: absolute; left: 50%; bottom: -1.1em; transform: translateX(-50%) rotate(1.5deg);
+  padding: .2em .9em; border-radius: 999px; background: #ffd54f; color: #222;
+  font-size: clamp(16px, 1.7vw, 30px); font-weight: 900; white-space: nowrap;
+}
+.hl-count {
+  position: absolute; right: 1.4vh; top: 1.4vh; padding: .1em .6em; border-radius: 999px;
+  background: rgba(0, 0, 0, .55); color: #fff; font-size: clamp(11px, .9vw, 16px); font-weight: 800;
+}
+.hl-thumbs { display: flex; gap: .6vw; flex-wrap: wrap; justify-content: center; margin-top: 1.6vh; }
+.hl-thumb {
+  padding: 3px; border: 0; border-radius: .3em; background: rgba(255, 255, 255, .35); cursor: pointer; opacity: .65;
+}
+.hl-thumb canvas { display: block; width: clamp(56px, 6vw, 110px); aspect-ratio: 16 / 9; height: auto; }
+.hl-thumb.on { background: #ffd54f; opacity: 1; }
+.hl-hidden-note { padding: 3vh 0; font-size: clamp(16px, 1.6vw, 28px); opacity: .8; }
+.hl-toggle {
+  font: inherit; font-size: clamp(14px, 1.4vw, 24px); font-weight: 800;
+  padding: .35em 1.2em; border-radius: 999px; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, .45); background: transparent; color: #fff;
+}
+[hidden].hl-stage, [hidden].hl-thumbs, [hidden].hl-hidden-note { display: none; }

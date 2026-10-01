@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>동작 녹화 분석</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px 16px 48px;
+      background: #0b1220; color: #e8eef7;
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; font-size: 15px;
+    }
+    main { max-width: 1280px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    h2 { margin: 26px 0 10px; font-size: 18px; color: #90caf9; }
+    p.note { margin: 0; opacity: .7; }
+    button, .filebtn {
+      font: inherit; font-weight: bold; padding: 8px 16px; border: 0; border-radius: 999px;
+      background: #ffd54f; color: #222; cursor: pointer; display: inline-block;
+    }
+    button.alt { background: rgba(255,255,255,.12); color: #fff; }
+    #drop {
+      display: block; cursor: pointer;
+      margin-top: 14px; padding: 22px; border: 2px dashed rgba(255,255,255,.25); border-radius: 14px;
+      text-align: center;
+    }
+    #drop.over { border-color: #ffd54f; background: rgba(255,213,79,.08); }
+    #drop input { display: none; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
+    th { color: #90caf9; font-weight: bold; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pass { color: #66bb6a; font-weight: bold; }
+    .fail { color: #ef5350; font-weight: bold; }
+    .files { display: flex; flex-direction: column; gap: 6px; }
+    .file { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.04); cursor: pointer; }
+    .file.sel { outline: 2px solid #ffd54f; }
+    .file .name { font-weight: bold; }
+    .file .info { opacity: .7; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 16px; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    #view { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; display: block; }
+    #timeline { width: 100%; height: 70px; display: block; margin-top: 8px; cursor: pointer; border-radius: 8px; background: rgba(255,255,255,.04); }
+    .controls { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    #time { font-variant-numeric: tabular-nums; min-width: 110px; }
+    #pose-dbg { font: 13px/1.5 Consolas, monospace; background: rgba(255,255,255,.04); padding: 10px 12px; border-radius: 10px; white-space: pre; overflow: auto; margin: 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.1); cursor: pointer; }
+    .th-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 6px 18px; }
+    .th-row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: center; }
+    .th-row input { font: inherit; width: 90px; padding: 4px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: #111a2e; color: #fff; }
+    .th-row.changed label { color: #ffd54f; }
+    select, .controls input[type=number] { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: #111a2e; color: #fff; }
+    details.video-help { margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.04); }
+    details.video-help summary { cursor: pointer; font-weight: bold; color: #90caf9; }
+    #v-progress { margin-top: 10px; }
+    #v-progress .bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 6px; }
+    #v-bar { height: 100%; width: 0; background: #ffd54f; transition: width .2s; }
+    #v-progress[hidden] { display: none; }
+    #snippet { width: 100%; min-height: 90px; margin-top: 10px; font: 13px Consolas, monospace; background: #111a2e; color: #e8eef7; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🎥 동작 녹화 분석</h1>
+  <p class="note">동작 테스트 페이지에서 V로 녹화한 파일(관절 좌표)이나 <b>휴대폰으로 찍은 영상</b>을 열면, 지금 기준값으로 동작마다 인식률을 계산합니다. 기준값을 바꾸면 바로 다시 계산해요.</p>
+
+  <label id="drop">
+    <input id="file" type="file" accept=".json,application/json,video/*" multiple>
+    <span class="filebtn">녹화 파일 또는 영상 열기</span>
+    <div class="note" style="margin-top:8px">또는 파일을 여기로 끌어다 놓기 (여러 개 가능 · 영상은 mp4, webm, mov)</div>
+  </label>
+
+  <details class="video-help" open>
+    <summary>영상 변환 설정</summary>
+    <div class="controls" style="margin-top:10px">
+      <label>인식 모델 <select id="v-model"><option value="full">정확 (full)</option><option value="lite">빠름 (lite)</option></select></label>
+      <label>초당 프레임 <select id="v-fps"><option value="30">30</option><option value="15">15 (2배 빠름)</option></select></label>
+      <label>회전 <select id="v-rotate"><option value="0">그대로</option><option value="90">오른쪽으로 90°</option><option value="180">180°</option><option value="270">왼쪽으로 90°</option></select></label>
+      <label><input type="checkbox" id="v-flip"> 좌우 뒤집기 (거울처럼 저장된 셀카 영상)</label>
+      <label>영상 속 실제 서브 횟수 <input id="v-serves" type="number" min="0" placeholder="모르면 비움" style="width:110px"></label>
+    </div>
+    <p class="note" style="margin-top:8px">찍는 법: 카메라를 <b>정면</b>에 두고 <b>허리부터 머리 위로 뻗은 손까지</b> 보이게 찍기 · 처음 <b>3초는 차렷</b>으로 가만히 서 있기(몸 크기를 잽니다) · 한 사람만 나오게. 영상은 이 컴퓨터 안에서만 처리되고, 결과에는 관절 좌표만 남습니다.</p>
+  </details>
+  <div id="v-progress" hidden>
+    <div class="controls"><span id="v-msg"></span><button class="alt" id="v-cancel">취소</button></div>
+    <div class="bar"><div id="v-bar"></div></div>
+  </div>
+
+  <h2>녹화 파일</h2>
+  <div class="files" id="files"><p class="note">아직 연 파일이 없어요.</p></div>
+
+  <h2>동작별 인식 결과 (전체 파일 합계)</h2>
+  <table id="summary"></table>
+
+  <h2>새 서브 판정 결과 (토스 → 다른 손으로 치기)</h2>
+  <p class="note">파일마다 "실제 서브 횟수"를 적으면 인식률을 계산합니다. 타임라인 아래 줄: 노랑 = 토스, 파랑 = 플로터, 주황 = 스파이크 서브, 빨강 = 토스 취소.</p>
+  <table id="serves"></table>
+
+  <h2>재생</h2>
+  <div class="layout">
+    <div>
+      <canvas id="view"></canvas>
+      <canvas id="timeline"></canvas>
+      <div class="controls">
+        <button id="play">▶ 재생</button>
+        <button class="alt" data-speed="0.25">0.25배</button>
+        <button class="alt" data-speed="0.5">0.5배</button>
+        <button class="alt" data-speed="1">1배</button>
+        <span id="time">0.0 / 0.0초</span>
+      </div>
+      <div class="note" style="margin-top:10px">놓친 구간 (눌러서 이동)</div>
+      <div class="chips" id="misses"></div>
+    </div>
+    <pre id="pose-dbg">파일을 열면 이 자리에 판정 수치가 나와요.</pre>
+  </div>
+
+  <h2>기준값 조정</h2>
+  <p class="note">단위: 거리 = 몸통 길이(어깨~골반)를 1로 둔 값, 시간 = ms. 바뀐 값은 노란색으로 표시됩니다.</p>
+  <div class="controls" style="margin:10px 0">
+    <button class="alt" id="reset">처음 값으로</button>
+    <button class="alt" id="copy">바뀐 값 복사</button>
+  </div>
+  <div class="th-grid" id="th"></div>
+  <h2>새 서브 기준값</h2>
+  <div class="th-grid" id="serve-th"></div>
+  <textarea id="snippet" readonly placeholder="바뀐 기준값이 여기에 코드로 나옵니다. 이 내용을 Claude에게 보내면 게임에 반영합니다."></textarea>
+</main>
+<script type="module" src="src/replay.js"></script>
+</body>
+</html>

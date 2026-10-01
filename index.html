@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>웹캠 비치발리볼</title>
+  <link rel="preload" href="assets/ui/menu/menu-bg.webp" as="image" type="image/webp">
+  <link rel="stylesheet" href="game.css?v=20261001f">
+  <link rel="stylesheet" href="src/highlight-reel.css">
+  <link rel="stylesheet" href="src/ui/hand-cursor.css">
+</head>
+<body>
+  <div id="game">
+    <canvas id="court"></canvas><div id="vs-divider" aria-hidden="true"></div>
+    <div id="flash" aria-hidden="true"></div>
+
+    <div id="score-me-box" class="score-box me"><span>우리 팀</span><b id="score-me">0</b></div>
+    <div id="score-ai-box" class="score-box ai"><b id="score-ai">0</b><span>상대 팀</span></div>
+    <div id="goal" class="pill"></div>
+    <div id="action-cues" aria-live="polite"><div class="action-cue" hidden></div><div class="action-cue" hidden></div></div>
+    <div id="slowmo"><span>JUMP!</span></div>
+    <div id="replay-label" hidden>REPLAY</div>
+
+    <div id="message"><div id="msg-text"></div><div id="msg-sub"></div></div>
+    <div id="hand-confirm" hidden></div>
+
+    <div id="pip-wrap"><canvas id="pip"></canvas><div id="pip-join"></div></div>
+    <div id="cam-overlay">
+      <div id="cam-msg"></div>
+      <div id="hand-choice"></div>
+      <div id="cam-bar"><div id="cam-fill"></div></div>
+    </div>
+    <div id="pause" hidden>
+      <strong>일시정지</strong><small>계속하기를 손으로 골라요</small>
+      <div class="pause-actions">
+        <button id="resume" class="big" data-hand-target>계속하기</button>
+        <button id="pause-home" class="big alt" data-hand-target>처음으로</button>
+      </div>
+    </div>
+    <pre id="perf" hidden></pre>
+    <div id="gpu-warning" hidden></div>
+
+    <div id="keys-help"></div>
+
+    <div id="team-intro" class="ceremony" hidden>
+      <h2>오늘의 팀</h2><div id="team-card" class="team-card"></div>
+      <small>손 흔들기 · 클릭으로 건너뛰기</small>
+    </div>
+    <div id="tutorial-hud" hidden>
+      <div id="tutorial-prompt"></div><div id="tutorial-cards"></div>
+    </div>
+    <div id="tutorial-complete" class="ceremony" hidden>
+      <h2>✅ 준비 완료!</h2>
+      <div class="start-row"><button id="tutorial-play" class="big" data-hand-target>경기 시작</button><button id="tutorial-home" class="big alt" data-hand-target>처음으로</button></div>
+    </div>
+    <div id="victory-show" class="ceremony victory" hidden><h2 id="victory-title"></h2></div>
+  </div>
+
+  <video id="video" playsinline muted></video>
+
+  <div id="start-screen" class="screen menu-screen">
+    <h1 class="menu-logo"><small>광안리</small>웹캠 비치발리볼</h1>
+    <div class="home-actions">
+      <button id="play-game" class="menu-primary" data-hand-target>▶ 경기하기</button>
+      <button id="start-tutorial" class="menu-secondary" data-hand-target>🎓 연습하기<span id="tutorial-done"></span></button>
+    </div>
+    <div class="corner-actions">
+      <button id="open-teacher-settings" data-hand-target>⚙️ 선생님 설정</button>
+      <button id="listen-help" data-hand-target>🔊 경기 방법 듣기</button>
+      <a href="intro.html" data-hand-target>🎬 처음 영상</a>
+      <button id="debug-keyboard" data-hand-target hidden>⌨️ 키보드(개발용)</button>
+    </div>
+    <p id="start-info">경기하기를 누르면 카메라가 켜져요</p>
+  </div>
+
+  <div id="mode-screen" class="screen menu-screen" hidden>
+    <button class="menu-back" data-back="start-screen" data-hand-target>← 뒤로</button>
+    <h1>몇 명이 해요?</h1>
+    <div class="choice-grid mode-grid">
+      <button data-camera-mode="solo" data-hand-target style="--card-image:url('assets/ui/menu/mode-solo.webp')"><b>혼자<small>나 + AI 짝꿍</small></b></button>
+      <button data-camera-mode="coop" data-hand-target style="--card-image:url('assets/ui/menu/mode-coop.webp')"><b>둘이 한 팀<small>두 사람이 같은 팀</small></b></button>
+      <button data-camera-mode="versus" data-hand-target style="--card-image:url('assets/ui/menu/mode-versus.webp')"><b>둘이 대결<small>두 사람이 서로 상대</small></b></button>
+    </div>
+  </div>
+
+  <div id="character-screen" class="screen menu-screen" hidden>
+    <button class="menu-back" data-back="mode-screen" data-hand-target>← 뒤로</button>
+    <h1 id="character-title">1P 선수를 골라요</h1>
+    <div id="character-grid" class="character-grid">
+      <button data-character="ara" data-hand-target><img src="assets/ui/menu/char-ara.webp" alt="아라"><span class="character-number">1</span><b>아라</b></button>
+      <button data-character="min" data-hand-target><img src="assets/ui/menu/char-min.webp" alt="민"><span class="character-number">2</span><b>민</b></button>
+      <button data-character="sori" data-hand-target><img src="assets/ui/menu/char-sori.webp" alt="소리"><span class="character-number">3</span><b>소리</b></button>
+      <button data-character="jun" data-hand-target><img src="assets/ui/menu/char-jun.webp" alt="준"><span class="character-number">4</span><b>준</b></button>
+    </div>
+  </div>
+
+  <div id="ready-screen" class="screen menu-screen" hidden>
+    <button class="menu-back" data-back="character-screen" data-hand-target>← 뒤로</button>
+    <h1>준비됐나요?</h1>
+    <div id="ready-team-card" class="team-card ready-team-card"></div>
+    <div class="ready-chips">
+      <button id="difficulty-chip" data-hand-target>보통</button>
+      <button id="target-chip" data-hand-target>7점</button>
+    </div>
+    <button id="start-match" class="menu-primary start-match" data-hand-target>▶ 시작!</button>
+  </div>
+
+  <div id="teacher-settings" class="screen menu-screen teacher-screen" hidden>
+    <button class="menu-back" data-back="start-screen" data-hand-target>← 뒤로</button>
+    <h1>선생님 설정</h1>
+    <div class="teacher-options">
+      <div class="setting-line"><b>리플레이</b><button data-replay="on" data-hand-target>켜짐</button><button data-replay="off" data-hand-target>꺼짐</button></div>
+      <div class="setting-line"><b>사진 모음</b><button data-highlight="on" data-hand-target>켜짐</button><button data-highlight="off" data-hand-target>꺼짐</button></div>
+      <div class="setting-line"><b>VS 화면</b><button data-vs-split="split" data-hand-target>나누기</button><button data-vs-split="single" data-hand-target>하나</button></div>
+      <div class="setting-line"><b>1P 손</b><span class="hand-choice" data-player="0"><button data-hand="right" data-hand-target>오른손</button><button data-hand="left" data-hand-target>왼손</button></span></div>
+      <div class="setting-line"><b>2P 손</b><span class="hand-choice" data-player="1"><button data-hand="right" data-hand-target>오른손</button><button data-hand="left" data-hand-target>왼손</button></span></div>
+    </div>
+    <p>서브할 때는 공을 던진 손을 보고 자동으로 바뀌어요.</p>
+    <div class="teacher-links"><a href="test.html" data-hand-target>동작 인식 테스트</a><a href="intro.html" data-hand-target>처음 영상</a></div>
+    <small>선생님용 키: P 일시정지 · Esc 처음으로 · Enter 다시 하기 · F2 성능</small>
+    <button id="close-teacher-settings" class="menu-primary settings-done" data-hand-target>완료</button>
+  </div>
+
+  <div id="over-screen" class="screen" hidden>
+    <h1 id="over-title"></h1>
+    <div id="result-card" class="result-card"><b>오늘의 결과</b><div id="over-score"></div></div>
+    <div id="over-stats"></div>
+    <div id="over-reel"></div>
+    <div class="start-row">
+      <button id="again" class="big" data-hand-target>다시 하기</button>
+      <button id="home" class="big alt" data-hand-target>처음으로</button>
+    </div>
+  </div>
+
+  <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
+  <script type="module" src="src/game/main.js?v=20261001f"></script>
+</body>
+</html>
+
+
+
+

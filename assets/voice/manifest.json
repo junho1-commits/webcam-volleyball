@@ -1,0 +1,252 @@
+{
+  "tts": "typecast",
+  "model": "ssfm-v30",
+  "source": "api-page",
+  "generated_by": "claude-code",
+  "voices": {
+    "caster": "tc_6a6194d59eea84806aea652c",
+    "guide": "tc_6aa23da1f9559d89ed550d7e"
+  },
+  "files": {
+    "point_1": {
+      "file": "point_1.mp3",
+      "text": "득점! 좋아요!",
+      "voice": "caster",
+      "hash": "fdd33b3606f9"
+    },
+    "point_2": {
+      "file": "point_2.mp3",
+      "text": "나이스 플레이!",
+      "voice": "caster",
+      "hash": "9ece58d30a6d"
+    },
+    "point_3": {
+      "file": "point_3.mp3",
+      "text": "완벽한 공격이에요!",
+      "voice": "caster",
+      "hash": "d4bf5e17aa71"
+    },
+    "lose_1": {
+      "file": "lose_1.mp3",
+      "text": "아쉽다! 다음 공 갑시다!",
+      "voice": "caster",
+      "hash": "2ed43492714a"
+    },
+    "lose_2": {
+      "file": "lose_2.mp3",
+      "text": "괜찮아요, 다시 해 봐요!",
+      "voice": "caster",
+      "hash": "5eb9994f15b4"
+    },
+    "lose_3": {
+      "file": "lose_3.mp3",
+      "text": "아, 놓쳤어요!",
+      "voice": "caster",
+      "hash": "1933e7464116"
+    },
+    "block_1": {
+      "file": "block_1.mp3",
+      "text": "블로킹! 막아냈어요!",
+      "voice": "caster",
+      "hash": "c85483a79a1f"
+    },
+    "block_2": {
+      "file": "block_2.mp3",
+      "text": "철벽 수비!",
+      "voice": "caster",
+      "hash": "25b76fbbdeed"
+    },
+    "spike_1": {
+      "file": "spike_1.mp3",
+      "text": "강스파이크!",
+      "voice": "caster",
+      "hash": "2e5776be7953"
+    },
+    "spike_2": {
+      "file": "spike_2.mp3",
+      "text": "대단한 스파이크!",
+      "voice": "caster",
+      "hash": "56e491895e63"
+    },
+    "perfect_1": {
+      "file": "perfect_1.mp3",
+      "text": "퍼펙트!",
+      "voice": "caster",
+      "hash": "d3c8730e0116"
+    },
+    "match_start": {
+      "file": "match_start.mp3",
+      "text": "비치 발리볼, 경기 시작합니다!",
+      "voice": "caster",
+      "hash": "ca12ae124354"
+    },
+    "match_point": {
+      "file": "match_point.mp3",
+      "text": "매치 포인트!",
+      "voice": "caster",
+      "hash": "79445bea6049"
+    },
+    "win": {
+      "file": "win.mp3",
+      "text": "우리 팀 승리! 정말 멋졌어요!",
+      "voice": "caster",
+      "hash": "102c5bbda187"
+    },
+    "defeat": {
+      "file": "defeat.mp3",
+      "text": "수고했어요! 다음엔 꼭 이길 수 있어요!",
+      "voice": "caster",
+      "hash": "bca59969bd1b"
+    },
+    "do_bump": {
+      "file": "do_bump.mp3",
+      "text": "리시브!",
+      "voice": "guide",
+      "hash": "b3d667b7623b"
+    },
+    "do_set": {
+      "file": "do_set.mp3",
+      "text": "토스!",
+      "voice": "guide",
+      "hash": "b47400d41159"
+    },
+    "do_spike": {
+      "file": "do_spike.mp3",
+      "text": "점프! 스파이크!",
+      "voice": "guide",
+      "hash": "0ffc4709b22f"
+    },
+    "do_block": {
+      "file": "do_block.mp3",
+      "text": "블로킹!",
+      "voice": "guide",
+      "hash": "4e8ad9152539"
+    },
+    "do_serve": {
+      "file": "do_serve.mp3",
+      "text": "서브하세요! 한 손으로 공을 위로 던지고, 다른 손으로 치세요!",
+      "voice": "guide",
+      "hash": "ac8fdf548c27"
+    },
+    "move_left": {
+      "file": "move_left.mp3",
+      "text": "왼쪽으로!",
+      "voice": "guide",
+      "hash": "26b2acecee5a"
+    },
+    "move_right": {
+      "file": "move_right.mp3",
+      "text": "오른쪽으로!",
+      "voice": "guide",
+      "hash": "8f044faece64"
+    },
+    "help_stand": {
+      "file": "help_stand.mp3",
+      "text": "화면 앞에 서 주세요.",
+      "voice": "guide",
+      "hash": "847cf65c277e"
+    },
+    "help_step_back": {
+      "file": "help_step_back.mp3",
+      "text": "한 걸음 뒤로 가 주세요. 어깨와 허리가 보여야 해요.",
+      "voice": "guide",
+      "hash": "6fa34fbbd085"
+    },
+    "help_come_closer": {
+      "file": "help_come_closer.mp3",
+      "text": "조금 앞으로 와 주세요.",
+      "voice": "guide",
+      "hash": "188a0d36263a"
+    },
+    "help_calibrate": {
+      "file": "help_calibrate.mp3",
+      "text": "차렷 자세로, 가만히 서 있으세요.",
+      "voice": "guide",
+      "hash": "5cad611812bb"
+    },
+    "help_raise_hand": {
+      "file": "help_raise_hand.mp3",
+      "text": "공을 치는 손을, 하늘 높이 번쩍 들어 주세요!",
+      "voice": "guide",
+      "hash": "4d1ef50a8399"
+    },
+    "hand_left": {
+      "file": "hand_left.mp3",
+      "text": "왼손잡이 선수, 준비 완료!",
+      "voice": "guide",
+      "hash": "b1f2690c1138"
+    },
+    "hand_right": {
+      "file": "hand_right.mp3",
+      "text": "오른손잡이 선수, 준비 완료!",
+      "voice": "guide",
+      "hash": "962316ae5ba2"
+    },
+    "help_ready": {
+      "file": "help_ready.mp3",
+      "text": "준비 완료! 시작합니다!",
+      "voice": "guide",
+      "hash": "3992c7f9160d"
+    },
+    "help_p2_join": {
+      "file": "help_p2_join.mp3",
+      "text": "투피 참가! 차렷 자세로 서 주세요.",
+      "voice": "guide",
+      "hash": "f34bc3b2f3a9"
+    },
+    "title_call": {
+      "file": "title_call.mp3",
+      "text": "웹캠! 비치 발리볼!",
+      "voice": "caster",
+      "hash": "599aa17c3670"
+    },
+    "help_wave_start": {
+      "file": "help_wave_start.mp3",
+      "text": "손을 흔들어서 시작하세요!",
+      "voice": "guide",
+      "hash": "225a43220198"
+    },
+    "help_how_to_play": {
+      "file": "help_how_to_play.mp3",
+      "text": "분홍색 원으로 움직여서, 공이 오면 두 손을 모아 리시브! 두 손을 이마 위로 올리면 토스! 점프하며 힘껏 내려치면 스파이크예요!",
+      "voice": "guide",
+      "hash": "287af8929651"
+    },
+    "do_serve_hit": {
+      "file": "do_serve_hit.mp3",
+      "text": "지금 치세요!",
+      "voice": "guide",
+      "hash": "a5bc97f882bd"
+    },
+    "serve_float": {
+      "file": "serve_float.mp3",
+      "text": "플로터 서브!",
+      "voice": "caster",
+      "hash": "9220778ea19b"
+    },
+    "serve_spike": {
+      "file": "serve_spike.mp3",
+      "text": "스파이크 서브!",
+      "voice": "caster",
+      "hash": "ff440d1332c7"
+    },
+    "serve_power": {
+      "file": "serve_power.mp3",
+      "text": "강서브!",
+      "voice": "caster",
+      "hash": "d381af996a2e"
+    },
+    "serve_retry": {
+      "file": "serve_retry.mp3",
+      "text": "다시 한 번 토스해 보세요!",
+      "voice": "guide",
+      "hash": "b1ea1bb409d7"
+    },
+    "serve_fault": {
+      "file": "serve_fault.mp3",
+      "text": "서브 실패! 다음엔 할 수 있어요!",
+      "voice": "caster",
+      "hash": "af4cede8e72e"
+    }
+  }
+}

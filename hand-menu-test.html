@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>손 제스처 메뉴 테스트</title>
+  <link rel="stylesheet" href="src/ui/hand-cursor.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      background: #0b1220; color: #e8eef7;
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 상단 네비게이션 및 컨트롤 */
+    header {
+      padding: 16px 24px;
+      background: rgba(11, 18, 32, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+
+    .title-area h1 {
+      margin: 0; font-size: 22px; font-weight: 800;
+      color: #fff; display: flex; align-items: center; gap: 8px;
+    }
+    .title-area p { margin: 4px 0 0; font-size: 13px; color: #76c8ee; opacity: 0.9; }
+
+    .controls-area {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+
+    button.btn, label.btn {
+      font: inherit; font-size: 14px; font-weight: bold;
+      padding: 8px 18px; border-radius: 999px; border: 0;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.2s, transform 0.1s;
+      background: rgba(255, 255, 255, 0.12); color: #fff;
+    }
+    button.btn:active, label.btn:active { transform: scale(0.96); }
+    button.btn.primary { background: #ffd54f; color: #111; }
+    button.btn.active { outline: 2px solid #ffd54f; background: rgba(255, 213, 79, 0.2); color: #ffd54f; }
+    input[type="file"] { display: none; }
+
+    /* 메인 컨테이너 */
+    main {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 24px 60px;
+      max-width: 1400px; margin: 0 auto; width: 100%;
+    }
+
+    /* 선택 결과 배너 */
+    .status-banner {
+      margin-bottom: 36px; text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 14px 32px; border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex; align-items: center; gap: 12px;
+      font-size: 17px;
+    }
+    .status-banner .label { color: #76c8ee; font-weight: bold; }
+    .status-banner .val { color: #ffd54f; font-weight: 800; font-size: 20px; }
+
+    /* 큰 메뉴 버튼 그리드 (화면 너비 12% 이상) */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 420px));
+      gap: 28px;
+      width: 100%;
+      max-width: 900px;
+      justify-content: center;
+    }
+
+    .menu-card {
+      background: linear-gradient(145deg, #152038, #0e172a);
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 36px 28px;
+      cursor: pointer;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .menu-card .icon { font-size: 48px; margin-bottom: 12px; display: block; }
+    .menu-card .title { font-size: 26px; font-weight: 800; margin-bottom: 6px; color: #fff; }
+    .menu-card .desc { font-size: 14px; color: #9bb1cf; }
+
+    /* 손 흔들기 감지 알림 토스트 (중앙 상단) */
+    #waveToast {
+      position: fixed;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: #ffd54f;
+      color: #0b1220;
+      font-size: 26px;
+      font-weight: 900;
+      padding: 16px 36px;
+      border-radius: 999px;
+      box-shadow: 0 8px 30px rgba(255, 213, 79, 0.6), 0 4px 12px rgba(0,0,0,0.4);
+      z-index: 100000;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s;
+    }
+    #waveToast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* 우측 하단 미니 뷰 (웹캠 / 녹화 관절 시각화) */
+    .mini-pip {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 260px;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      z-index: 50;
+      display: none;
+    }
+    .mini-pip.active { display: block; }
+    .mini-pip video, .mini-pip canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
+    }
+    .mini-pip canvas { pointer-events: none; }
+    .pip-badge {
+      position: absolute; top: 8px; left: 8px;
+      background: rgba(0,0,0,0.6); color: #76c8ee; font-size: 11px; font-weight: bold;
+      padding: 3px 8px; border-radius: 6px; z-index: 2;
+    }
+
+    /* 녹화 파일 재생 제어 바 */
+    #replayBar {
+      display: none;
+      align-items: center; gap: 12px;
+      margin-top: 24px;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 10px 20px; border-radius: 12px; width: 100%; max-width: 900px;
+    }
+    #replayBar.active { display: flex; }
+    #replaySlider { flex: 1; cursor: pointer; accent-color: #ffd54f; }
+    #replayTime { font-variant-numeric: tabular-nums; font-size: 13px; color: #9bb1cf; min-width: 80px; }
+
+    /* 하단 가이드 */
+    footer {
+      padding: 16px; text-align: center; font-size: 14px; color: #76c8ee; opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="title-area">
+    <h1>🖐️ 손 메뉴 테스트</h1>
+    <p>손을 들어 커서를 움직이고 버튼 위에 1.5초 머무르면 선택됩니다</p>
+  </div>
+  <div class="controls-area">
+    <button id="btnMouse" class="btn active">🖱️ 마우스 시험 (켜짐)</button>
+    <button id="btnCamera" class="btn primary">📹 웹캠 켜기</button>
+    <label class="btn" title="동작 녹화 JSON 파일 재생">
+      📁 녹화 파일 열기
+      <input type="file" id="fileReplay" accept=".json">
+    </label>
+  </div>
+</header>
+
+<main>
+  <!-- 손 흔들기 알림 -->
+  <div id="waveToast">👋 손 흔들기 감지!</div>
+
+  <!-- 최근 선택 결과 -->
+  <div class="status-banner">
+    <span class="label">선택 결과:</span>
+    <span id="selectedResult" class="val">아직 선택된 항목이 없습니다</span>
+  </div>
+
+  <!-- 큰 메뉴 버튼 4개 -->
+  <div class="menu-grid">
+    <div class="menu-card" data-hand-target id="btnPlay">
+      <span class="icon">🏐</span>
+      <div class="title">게임 시작</div>
+      <div class="desc">코트로 바로 입장합니다</div>
+    </div>
+    <div class="menu-card" data-hand-target id="btnEasy">
+      <span class="icon">🌱</span>
+      <div class="title">쉬움</div>
+      <div class="desc">초보자를 위한 느긋한 공 속도</div>
+    </div>
+    <div class="menu-card" data-hand-target id="btnNormal">
+      <span class="icon">⚡</span>
+      <div class="title">보통</div>
+      <div class="desc">흥미진진한 기본 난이도</div>
+    </div>
+    <div class="menu-card" data-hand-target id="btnHard">
+      <span class="icon">🔥</span>
+      <div class="title">어려움</div>
+      <div class="desc">빠른 반사신경이 필요한 도전 모드</div>
+    </div>
+  </div>
+
+  <!-- 녹화 재생 타임라인 바 -->
+  <div id="replayBar">
+    <button id="btnPlayPause" class="btn">⏸️ 일시정지</button>
+    <input type="range" id="replaySlider" min="0" value="0" step="1">
+    <span id="replayTime">0.0s / 0.0s</span>
+  </div>
+</main>
+
+<footer>
+  💡 멀리서도 잘 보이는 고시인성 손 커서 · 버튼 이탈 시 히스테리시스 떨림 방지 적용
+</footer>
+
+<!-- 미니 뷰 (웹캠 / 관절 시각화) -->
+<div id="miniPip" class="mini-pip">
+  <span id="pipBadge" class="pip-badge">영상</span>
+  <video id="webcamVideo" playsinline muted></video>
+  <canvas id="pipCanvas"></canvas>
+</div>
+
+<script type="module">
+  import { HandCursor, WaveDetector, handFromPose } from './src/ui/hand-cursor.js';
+  import { LM } from './src/body.js';
+  import { unpackPose } from './src/recorder.js';
+  import { startCamera, createPose, makePoseReader } from './src/camera.js';
+
+  const $ = id => document.getElementById(id);
+  const selectedResult = $('selectedResult');
+  const waveToast = $('waveToast');
+  const btnMouse = $('btnMouse');
+  const btnCamera = $('btnCamera');
+  const fileReplay = $('fileReplay');
+  const miniPip = $('miniPip');
+  const pipBadge = $('pipBadge');
+  const webcamVideo = $('webcamVideo');
+  const pipCanvas = $('pipCanvas');
+  const pipCtx = pipCanvas.getContext('2d');
+  const replayBar = $('replayBar');
+  const btnPlayPause = $('btnPlayPause');
+  const replaySlider = $('replaySlider');
+  const replayTime = $('replayTime');
+
+  let audioCtx = null;
+  function playBeep(freq = 600, duration = 0.08) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+  }
+
+  // 1. 손 커서 인스턴스 초기화
+  const cursor = new HandCursor({
+    root: document.body,
+    dwellMs: 1500,
+    onHover(el) {
+      playBeep(480, 0.05); // 버튼 위에 올라갔을 때 틱 소리
+    },
+    onSelect(el) {
+      playBeep(880, 0.2); // 선택 시 맑은 확인 소리
+      const title = el.querySelector('.title')?.innerText || el.innerText;
+      selectedResult.textContent = `🎯 '${title}' 선택 완료!`;
+      selectedResult.style.color = '#ffd54f';
+    }
+  });
+
+  // 2. 손 흔들기 감지기 초기화
+  let toastTimer = null;
+  const wave = new WaveDetector({
+    onWave() {
+      playBeep(1200, 0.25);
+      waveToast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => waveToast.classList.remove('show'), 2000);
+    }
+  });
+
+  // 3. 버튼 클릭 이벤트 바인딩
+  document.querySelectorAll('[data-hand-target]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const title = btn.querySelector('.title')?.innerText || btn.innerText;
+      selectedResult.textContent = `🎯 '${title}' 선택 완료!`;
+    });
+  });
+
+  // 4. 마우스 모드 (기본 활성화)
+  let mouseActive = true;
+  cursor.enableMouse(true);
+  btnMouse.addEventListener('click', () => {
+    mouseActive = !mouseActive;
+    cursor.enableMouse(mouseActive);
+    btnMouse.classList.toggle('active', mouseActive);
+    btnMouse.textContent = mouseActive ? '🖱️ 마우스 시험 (켜짐)' : '🖱️ 마우스 시험 (꺼짐)';
+  });
+
+  // 5. 웹캠 모드
+  let cameraActive = false;
+  let poseReader = null;
+  let prevHand = null;
+
+  btnCamera.addEventListener('click', async () => {
+    if (cameraActive) return;
+    try {
+      btnCamera.textContent = '⏳ 카메라 준비 중...';
+      btnCamera.disabled = true;
+
+      await startCamera(webcamVideo);
+      const pose = await createPose('lite', 'GPU');
+      poseReader = makePoseReader(pose, webcamVideo);
+
+      cameraActive = true;
+      miniPip.classList.add('active');
+      pipBadge.textContent = '실시간 웹캠 (거울)';
+      btnCamera.textContent = '📹 웹캠 켜짐';
+      btnCamera.classList.add('active');
+
+      requestAnimationFrame(loopCamera);
+    } catch (e) {
+      alert('카메라 실행 실패: ' + e.message);
+      btnCamera.textContent = '📹 웹캠 켜기';
+      btnCamera.disabled = false;
+    }
+  });
+
+  function loopCamera(t) {
+    if (!cameraActive) return;
+
+    if (webcamVideo.videoWidth && pipCanvas.width !== webcamVideo.videoWidth) {
+      pipCanvas.width = webcamVideo.videoWidth;
+      pipCanvas.height = webcamVideo.videoHeight;
+    }
+
+    const landmarksList = poseReader ? poseReader(t) : null;
+    pipCtx.clearRect(0, 0, pipCanvas.width, pipCanvas.height);
+
+    if (landmarksList && landmarksList.length > 0) {
+      drawPoseSkeleton(pipCtx, landmarksList[0], pipCanvas.width, pipCanvas.height);
+      const hand = handFromPose(landmarksList, prevHand);
+      prevHand = hand;
+      cursor.update(hand);
+      wave.update(landmarksList, t);
+    } else {
+      cursor.update(null);
+    }
+
+    requestAnimationFrame(loopCamera);
+  }
+
+  // 6. 녹화 파일 재생 모드
+  let replayData = null;
+  let replayIndex = 0;
+  let replayPlaying = false;
+  let replayPrevHand = null;
+  let replayTimer = null;
+
+  fileReplay.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      if (json.kind !== 'webcam-volleyball-pose-recording' && !json.frames) {
+        throw new Error('올바른 동작 녹화 JSON 형식이 아닙니다.');
+      }
+      loadReplay(json);
+    } catch (err) {
+      alert('녹화 파일 읽기 실패: ' + err.message);
+    }
+  });
+
+  function loadReplay(data) {
+    replayData = data;
+    replayIndex = 0;
+    replayPlaying = true;
+    replayBar.classList.add('active');
+    miniPip.classList.add('active');
+    pipBadge.textContent = '녹화 재생';
+    pipCanvas.width = 640;
+    pipCanvas.height = 360;
+
+    replaySlider.max = data.frames.length - 1;
+    replaySlider.value = 0;
+    btnPlayPause.textContent = '⏸️ 일시정지';
+
+    if (replayTimer) cancelAnimationFrame(replayTimer);
+    playReplayLoop();
+  }
+
+  function playReplayLoop() {
+    if (!replayData || !replayPlaying) return;
+
+    const frame = replayData.frames[replayIndex];
+    if (frame) {
+      const [tMs, label, rawPoses] = frame;
+      const poses = rawPoses.map(unpackPose);
+
+      pipCtx.clearRect(0, 0, pipCanvas.width, pipCanvas.height);
+      if (poses.length > 0) {
+        drawPoseSkeleton(pipCtx, poses[0], pipCanvas.width, pipCanvas.height);
+        const hand = handFromPose(poses, replayPrevHand);
+        replayPrevHand = hand;
+        cursor.update(hand);
+        wave.update(poses, tMs);
+      } else {
+        cursor.update(null);
+      }
+
+      replaySlider.value = replayIndex;
+      const totalMs = replayData.frames[replayData.frames.length - 1][0];
+      replayTime.textContent = `${(tMs / 1000).toFixed(1)}s / ${(totalMs / 1000).toFixed(1)}s`;
+
+      replayIndex++;
+      if (replayIndex >= replayData.frames.length) {
+        replayIndex = 0; // 반복 재생
+      }
+    }
+
+    replayTimer = requestAnimationFrame(playReplayLoop);
+  }
+
+  btnPlayPause.addEventListener('click', () => {
+    replayPlaying = !replayPlaying;
+    btnPlayPause.textContent = replayPlaying ? '⏸️ 일시정지' : '▶️ 재생';
+    if (replayPlaying) playReplayLoop();
+  });
+
+  replaySlider.addEventListener('input', e => {
+    replayIndex = parseInt(e.target.value, 10);
+  });
+
+  // 간단한 뼈대 렌더링 헬퍼 (거울 모드 x = 1 - x 반영)
+  function drawPoseSkeleton(ctx, lm, w, h) {
+    if (!lm) return;
+    ctx.save();
+    ctx.strokeStyle = '#76c8ee';
+    ctx.fillStyle = '#ffd54f';
+    ctx.lineWidth = 3;
+
+    const toScreen = p => ({ x: (1 - p.x) * w, y: p.y * h });
+    const pairs = [
+      [11, 12], [11, 13], [13, 15],
+      [12, 14], [14, 16],
+      [11, 23], [12, 24], [23, 24]
+    ];
+
+    for (const [i, j] of pairs) {
+      if (lm[i] && lm[j]) {
+        const p1 = toScreen(lm[i]), p2 = toScreen(lm[j]);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+
+    // 손목 강조
+    for (const i of [15, 16]) {
+      if (lm[i]) {
+        const p = toScreen(lm[i]);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+</script>
+</body>
+</html>

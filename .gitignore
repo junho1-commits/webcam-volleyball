@@ -1,0 +1,19 @@
+# 공개 저장소에는 실행 파일만 포함한다.
+/.claude/
+/.agents/
+/art/
+/docs/
+/시험영상/
+/tools/
+/AGENTS.md
+/CLAUDE.md
+/요청_*.md
+/실행.bat
+*.test.js
+__pycache__/
+*.pyc
+.env
+.env.*
+*.log
+node_modules/
+

@@ -1,0 +1,57 @@
+{
+  "idle": {
+    "file": "idle.glb",
+    "duration": 2.0,
+    "contact": null
+  },
+  "ready": {
+    "file": "ready.glb",
+    "duration": 1.0,
+    "contact": null
+  },
+  "move": {
+    "file": "move.glb",
+    "duration": 0.6,
+    "contact": null
+  },
+  "bump": {
+    "file": "bump.glb",
+    "duration": 0.8,
+    "contact": 0.35
+  },
+  "set": {
+    "file": "set.glb",
+    "duration": 0.8,
+    "contact": 0.4
+  },
+  "spike": {
+    "file": "spike.glb",
+    "duration": 1.2,
+    "contact": 0.7
+  },
+  "block": {
+    "file": "block.glb",
+    "duration": 1.0,
+    "contact": 0.45
+  },
+  "serve": {
+    "file": "serve.glb",
+    "duration": 1.2,
+    "contact": 0.75
+  },
+  "dive": {
+    "file": "dive.glb",
+    "duration": 1.0,
+    "contact": 0.3
+  },
+  "cheer": {
+    "file": "cheer.glb",
+    "duration": 2.0,
+    "contact": null
+  },
+  "sad": {
+    "file": "sad.glb",
+    "duration": 2.0,
+    "contact": null
+  }
+}

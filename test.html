@@ -1,0 +1,48 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>웹캠 배구 동작 테스트</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div id="topbar">
+      <div id="status" class="pill">준비 중</div>
+      <div id="rec" class="pill" hidden></div>
+      <div id="fps" class="pill">-- fps</div>
+    </div>
+
+    <div id="center-msg"></div>
+    <div id="calib-bar"><div id="calib-fill"></div></div>
+    <div id="flash"></div>
+    <div id="tester"></div>
+    <div id="serve-panel" hidden></div>
+
+    <div id="cards"></div>
+
+    <div id="help">숫자 1~6 동작 테스트(10회) · V 동작 녹화 시작/저장 · 공격 표시 7 스트레이트 · 8 크로스 · 9 라인 · 0 팁 · C 다시 측정 · R 기록 지우기 · D 디버그 · F 전체화면 · <a href="replay.html" target="_blank">녹화 분석 →</a></div>
+    <pre id="debug"></pre>
+  </div>
+
+  <div id="start-screen">
+    <h1>🏐 웹캠 배구</h1>
+    <p>동작 인식 테스트</p>
+    <button id="start-btn">시작하기</button>
+    <p id="start-info">카메라에서 2~3m 떨어져 서 주세요. 영상은 이 컴퓨터 안에서만 처리되고 저장되지 않습니다. (V 녹화는 관절 좌표만 파일로 저장)</p>
+  </div>
+
+  <script>
+    // 파일을 더블클릭해 열면(file://) 브라우저가 모듈을 막아 아무것도 안 된다. 바로 알려 준다.
+    if (location.protocol === 'file:') {
+      document.getElementById('start-info').innerHTML = '<b style="color:#ffd54f">이 파일을 직접 열면 실행되지 않아요.</b><br>실행.bat을 켠 뒤 주소창에 <b>http://127.0.0.1:8000/test.html</b> 을 입력하세요.';
+      document.getElementById('start-btn').disabled = true;
+    }
+  </script>
+  <script type="module" src="src/test.js"></script>
+</body>
+</html>

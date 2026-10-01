@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>웹캠 배구 소리 테스트</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px 16px 48px;
+      background: #0b1220; color: #fff;
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 32px; }
+    h2 { margin: 28px 0 10px; font-size: 20px; color: #90caf9; }
+    p { margin: 0; opacity: .75; }
+    .grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    button {
+      font: inherit; font-size: 17px; font-weight: bold;
+      padding: 10px 18px; border: 0; border-radius: 999px; cursor: pointer;
+      background: #ffd54f; color: #222;
+    }
+    button.alt { background: rgba(255,255,255,.14); color: #fff; }
+    button.on { background: #66bb6a; color: #0b1220; }
+    .row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+    .row label { width: 110px; }
+    .row input { flex: 1; max-width: 360px; }
+    .voice { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .voice code { color: #90caf9; width: 150px; flex: none; font-size: 13px; }
+    .voice span { flex: 1; }
+    #voice-status { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🔊 소리 테스트</h1>
+  <p>처음에 아무 버튼이나 누르면 소리가 켜집니다. 교실 TV 스피커로 크기를 맞춰 보세요.</p>
+
+  <h2>경기 효과음</h2>
+  <div class="grid" id="game-sfx"></div>
+
+  <h2>동작 테스트 페이지 효과음</h2>
+  <div class="grid" id="test-sfx"></div>
+
+  <h2>분위기와 음악</h2>
+  <div class="grid">
+    <button id="amb" class="alt">🌊 해변 분위기 켜기</button>
+    <button id="music" class="alt">🎵 배경음악 켜기</button>
+  </div>
+
+  <h2>음량</h2>
+  <div id="volumes"></div>
+
+  <h2>한국어 음성 (Typecast)</h2>
+  <p id="voice-status">불러오는 중…</p>
+  <div id="voice-list"></div>
+</main>
+
+<script type="module">
+  import { initSound, sfx, setVolume, startAmbience, stopAmbience, ambienceOn,
+    startMusic, stopMusic, musicOn, say, voiceReady } from './src/sound.js';
+
+  const $ = id => document.getElementById(id);
+  const GAME = { hit: '리시브·토스', spike: '스파이크·서브', block: '블로킹', miss: '놓침', point: '득점', lose: '실점', win: '승리' };
+  const TEST = { gesture: '동작 인식', ok: '테스트 성공', fail: '테스트 실패', tick: '시작 신호', done: '측정 완료' };
+
+  function buttons(target, names) {
+    for (const [k, label] of Object.entries(names)) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.onclick = () => { initSound(); sfx[k](); syncToggles(); };
+      $(target).appendChild(b);
+    }
+  }
+  buttons('game-sfx', GAME);
+  buttons('test-sfx', TEST);
+
+  function syncToggles() {
+    $('amb').className = ambienceOn() ? 'on' : 'alt';
+    $('amb').textContent = ambienceOn() ? '🌊 해변 분위기 끄기' : '🌊 해변 분위기 켜기';
+    $('music').className = musicOn() ? 'on' : 'alt';
+    $('music').textContent = musicOn() ? '🎵 배경음악 끄기' : '🎵 배경음악 켜기';
+  }
+  $('amb').onclick = () => { initSound(); ambienceOn() ? stopAmbience() : startAmbience(); syncToggles(); };
+  $('music').onclick = () => { initSound(); musicOn() ? stopMusic() : startMusic(); syncToggles(); };
+
+  const VOL = { master: ['전체', 0.9], sfx: ['효과음', 1], amb: ['분위기', 0.55], music: ['배경음악', 0.3], voice: ['음성', 1] };
+  for (const [k, [label, v]] of Object.entries(VOL)) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label>${label}</label><input type="range" min="0" max="1" step="0.05" value="${v}"><span>${Math.round(v * 100)}</span>`;
+    const input = row.querySelector('input'), out = row.querySelector('span');
+    input.oninput = () => { initSound(); setVolume(k, +input.value); out.textContent = Math.round(input.value * 100); };
+    $('volumes').appendChild(row);
+  }
+
+  // 음성 목록
+  try {
+    const res = await fetch('assets/voice/manifest.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('없음');
+    const m = await res.json();
+    $('voice-status').textContent = `음성 ${Object.keys(m.files).length}개 · 모델 ${m.model}`;
+    for (const [id, info] of Object.entries(m.files)) {
+      const row = document.createElement('div');
+      row.className = 'voice';
+      row.innerHTML = `<code>${id}</code><span></span><button class="alt">▶</button>`;
+      row.querySelector('span').textContent = info.text;
+      row.querySelector('button').onclick = async () => {
+        initSound();
+        for (let i = 0; i < 40 && !voiceReady(); i++) await new Promise(r => setTimeout(r, 100));
+        say(id, { priority: 9 });
+      };
+      $('voice-list').appendChild(row);
+    }
+  } catch {
+    $('voice-status').textContent = '아직 음성 파일이 없어요. tools/typecast_voices.py generate 를 먼저 실행하세요.';
+  }
+</script>
+</body>
+</html>

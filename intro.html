@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>웹캠 비치발리볼</title>
+  <link rel="stylesheet" href="src/intro/intro.css">
+  <style>html, body { margin: 0; background: #0b1220; }</style>
+</head>
+<body>
+  <script type="module">
+    import { mountIntro } from './src/intro/intro.js';
+    // 주소 뒤에 ?noopening 을 붙이면 오프닝 영상을 건너뛴다
+    mountIntro({
+      opening: !new URLSearchParams(location.search).has('noopening'),
+      onStart: () => { location.href = 'index.html?from=intro'; },
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+/* ==========================================================================
+   손 제스처 커서 및 메뉴 버튼 스타일 (Xbox 키넥트 스포츠 스타일)
+   - 선택 가능한 버튼은 최소 화면 너비의 12% 이상으로 만들 것을 권장합니다 (터치 및 원거리 손 제스처 접근성)
+   ========================================================================== */
+
+:root {
+  --hand-cursor-size: clamp(56px, 7vh, 84px);
+  --hand-color-accent: #ffd54f;
+  --hand-color-sky: #76c8ee;
+  --hand-color-bg: #0b1220;
+}
+
+/* 커서 래퍼: 포인터 이벤트 통과, 화면 최상단 */
+.hand-cursor-wrap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--hand-cursor-size);
+  height: var(--hand-cursor-size);
+  margin-left: calc(var(--hand-cursor-size) * -0.5);
+  margin-top: calc(var(--hand-cursor-size) * -0.5);
+  pointer-events: none;
+  z-index: 99999;
+  opacity: 0;
+  transform: translate3d(-9999px, -9999px, 0);
+  transition: opacity 0.15s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hand-cursor-wrap.visible {
+  opacity: 1;
+}
+
+/* 커서 진행 원 (SVG Ring) */
+.hand-cursor-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* 12시 방향부터 차오름 */
+  overflow: visible;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+}
+
+.hand-cursor-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 6;
+}
+
+.hand-cursor-ring-progress {
+  fill: none;
+  stroke: var(--hand-color-accent);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 263.89; /* 2 * PI * 42 */
+  stroke-dashoffset: 263.89;
+  transition: stroke-dashoffset 0.04s linear;
+}
+
+/* 손바닥 / 포인터 아이콘 */
+.hand-cursor-icon {
+  width: 58%;
+  height: 58%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.75));
+  transition: transform 0.12s ease;
+}
+
+.hand-cursor-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: #ffffff;
+}
+
+/* 호버 중일 때 커서 확대 반응 */
+.hand-cursor-wrap.hovering .hand-cursor-icon {
+  transform: scale(1.1);
+}
+
+/* 선택 완료 시 펄스 효과 */
+.hand-cursor-wrap.selected .hand-cursor-icon {
+  animation: hand-select-pulse 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes hand-select-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* ==========================================================================
+   선택 대상 버튼 [data-hand-target] 스타일
+   ========================================================================== */
+[data-hand-target] {
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1),
+              box-shadow 0.2s ease,
+              border-color 0.2s ease,
+              background-color 0.2s ease;
+  will-change: transform, box-shadow;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 손 커서가 위에 올라갔을 때 1.06배 확대 및 발광 */
+[data-hand-target].hand-hover {
+  transform: scale(1.06);
+  border-color: var(--hand-color-accent) !important;
+  box-shadow: 0 0 28px rgba(255, 213, 79, 0.75), 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 클릭/선택 시 햅틱 피드백 애니메이션 */
+[data-hand-target].hand-selected {
+  transform: scale(0.96);
+  box-shadow: 0 0 40px rgba(255, 213, 79, 1), 0 0 10px #ffffff !important;
+}
