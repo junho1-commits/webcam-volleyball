@@ -1,5 +1,5 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js';
+import { Ball } from './ball.js?v=20261001i';
 import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
@@ -370,6 +370,7 @@ export class Match {
     const from = this.ball.pos(this.time), remaining = Math.max(.05, this.ball.tHit - this.time);
     const style = this.ball.flightStyle;
     this.ball.launch(from, contact, remaining, this.time, style);
+    this.ball.keepGroundInCourt();
     return contact;
   }
 
@@ -658,7 +659,8 @@ export class Match {
       // 느은 판정 창이나 컴퓨터의 예약 타격이 남아 있는 동안은 땅 판정을 미룬다.
       const waitingForContact = (this.exp && !this.exp.done)
         || this.jobs.some(j => j.t <= this.ball.tHit + this.D.late);
-      if (p.y <= 0.12 && t > this.ball.t0 + 0.12 && !waitingForContact) this.ballDown(p);
+      const ground = this.ball.groundContact();
+      if (p.y <= 0.12 && t > this.ball.t0 + 0.12 && !waitingForContact) this.ballDown(ground ?? p);
     }
   }
 
@@ -987,6 +989,7 @@ export class Match {
     let flight = jump ? 1.5 + (.95 - 1.5) * effectiveStrength : 2.0 + (1.45 - 2.0) * effectiveStrength;
     if (this.practiceMode) flight /= .6;
     this.ball.launch(from, to, flight, this.time, jump ? 'spike' : 'float');
+    this.ball.keepGroundInCourt();
     this.popup(jump ? '스파이크 서브!' : '플로터 서브', jump ? '#ff8a65' : '#4fc3f7', actor.x, 3.0, actor.z);
     this.emit(jump ? 'serve-spike' : 'serve-float', { strength: effectiveStrength, team, playerIndex: toss.index + (team === 'ai' ? 2 : 0) });
     this.emit('practice-action', { action: 'serve', team, playerIndex: toss.index + (team === 'ai' ? 2 : 0), quality: timing >= .75 ? 'perfect' : 'good' });
@@ -1131,9 +1134,12 @@ export class Match {
     this.markAttack(tip ? 'tip' : 'spike', 'me', who);
     if (tip) this.stats.tips++; else this.stats.spikes++;
     this.emit('sound', tip ? 'hit' : 'spike');
-    const tz = tip ? rand(1.2, 3.2) : rand(3.4, 7.0);
+    let tz = tip ? rand(1.2, 3.2) : rand(3.4, quality === 'perfect' ? 5.2 : 5.7);
     const spread = (quality === 'perfect' ? .3 : .7) * (a.effects?.accuracyError ?? 1);
-    const tx = clamp(aim * (tip ? 2.5 : 3.0) + rand(-spread, spread), -3.35, 3.35);
+    let tx = clamp(aim * (tip ? 2.5 : 2.4) + rand(-spread, spread), -2.8, 2.8);
+    const timingMiss = !tip && a.human && this.applyAttackTiming(attack, quality, 1);
+    if (timingMiss) { tx = timingMiss.x ?? tx; tz = timingMiss.z ?? tz; }
+    else if (!tip) tx = this.safeSpikeX(p, tx);
     const readAdjustment = tip ? 0 : this.readingChanceAdjustment({ x: tx, z: tz });
     if (!tip && this.defenseRead?.attackingTeam === 'me') {
       const read = this.defenseRead, defender = this.actor(read.who);
@@ -1153,6 +1159,8 @@ export class Match {
     else if (Math.abs(aim) >= .5) this.popup(Math.sign(aim) === Math.sign(a.x || aim) ? '스트레이트!' : '크로스!', '#ffb74d', a.x, 3.2, a.z);
     const attackWeight = a.effects?.attack ?? 1;
     this.ball.launch(p, { x: tx, y: HIT.bump, z: tz }, tip ? rand(1.4, 1.8) : Math.max(0.72, (1.15 - 0.12 * power) / attackWeight), this.time, tip ? 'tip' : 'spike');
+    if (timingMiss) { this.rivalBlock = null; this.defenseRead = null; return; }
+    this.ball.keepGroundInCourt();
     let receiver = null;
     if (this.competitive && !tip && this.rivalBlock) {
       const { index, x } = this.rivalBlock, who = index + 2;
@@ -1171,13 +1179,33 @@ export class Match {
     if (receiver == null) receiver = this.defenseRead?.attackingTeam === 'me'
       ? this.defenseRead.defenderIndex
       : (Math.abs(this.ai[0].x - tx) <= Math.abs(this.ai[1].x - tx) ? 0 : 1);
-    // power 1은 보통 공격의 기준이고, 그보다 강한 단계마다 수비 확률을 0.07씩 낮춘다.
+    // 타이밍이 맞은 강한 하강 공격은 단계마다 수비 확률을 0.10씩 낮춘다.
     const freeBallAttackBonus = this.chain?.freeBall ? .45 : 0;
     // 읽기가 맞았을 때의 +0.15는 기존 난이도의 기본 수비율을 올리지 않고,
     // 방향을 읽어 움직인 보상으로만 작동하게 상쇄한다.
     const balance = this.defenseRead?.attackingTeam === 'me' ? .15 : 0;
-    const defenseChance = this.D.aiDig - balance - .07 * Math.max(0, power - 1) - (attackWeight - 1) * .75 - openCourtPenalty - freeBallAttackBonus + readAdjustment;
+    const defenseChance = this.D.aiDig - balance - .10 * Math.max(0, power - 1) - (attackWeight - 1) * .75 - openCourtPenalty - freeBallAttackBonus + readAdjustment;
     this.aiReceive(tip ? .94 : defenseChance, receiver, tip, tip ? 'tip' : 'spike');
+  }
+
+  applyAttackTiming(attack, quality, side) {
+    const error = Number.isFinite(attack.timingError) ? attack.timingError : 0;
+    const window = error < 0 ? this.D.early : this.D.late;
+    const outThreshold = this.D.perfect + .8 * Math.max(0, window - this.D.perfect);
+    if (Math.abs(error) <= outThreshold) return null;
+    // 너무 일찍 치면 길게, 늦게 치면 옆으로 빗나간다. 수비가 아웃 공을 안쪽으로 보정하지 않는다.
+    const miss = error < 0 ? { z: side * (COURT.halfL + 1.2) }
+      : { x: (attack.aim < 0 ? -1 : 1) * (COURT.halfW + 1.2) };
+    this.popup(error < 0 ? '너무 빨라요!' : '늦었어요!', '#ff8a65', 0, 3.4, side < 0 ? 1 : -1);
+    return miss;
+  }
+
+  safeSpikeX(from, targetX) {
+    // 수비 높이(.9m)를 지난 뒤 지면까지 이어지는 궤적도 라인 안에 들어오게 한다.
+    const extension = Math.pow((from.y - .12) / (from.y - HIT.bump), 1 / 1.35);
+    if (!Number.isFinite(extension) || extension < 1) return targetX;
+    const margin = COURT.halfW - .35;
+    return clamp(targetX, from.x + (-margin - from.x) / extension, from.x + (margin - from.x) / extension);
   }
 
   chooseAttackAim(defenders) {
@@ -1230,6 +1258,7 @@ export class Match {
     this.emit('practice-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
     this.emit('player-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
     if (e.action === 'spike') {
+      g = { ...g, timingError: g.t - e.tHit };
       if (g.kind === 'tip' || g.type === 'tip') e.next(q, true, { ...g, kind: 'tip' });
       else if (!['spike', 'serve'].includes(g.type)) e.next(q, true, g);
       else e.next(q, false, g);
@@ -1341,7 +1370,7 @@ export class Match {
     // 네트 앞 블로커는 깊은 공 수비수로 세지 않고, 뒤의 크로스 수비 위치만 보고 공격 방향을 고른다.
     const deepDefenders = !soft && this.pendingBlock ? [this.players[this.pendingBlock.digger]] : this.players;
     const aim = this.chooseAttackAim(deepDefenders);
-    if (spiker.human) this.expect('spike', ['spike', 'serve', 'set', 'bump'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, attack));
+    if (spiker.human) this.expect('spike', ['spike', 'serve', 'set', 'bump'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, { ...attack, quality: q }));
     else {
       this.planAnim(spiker, 'spike', this.ball.tHit, true, this.ball.target);
       if (spiker.anim) spiker.anim.aim = aim;
@@ -1372,13 +1401,19 @@ export class Match {
     const digger = this.pendingBlock?.digger;
     const accuracyWeight = spiker.effects?.accuracyError ?? 1;
     const attackWeight = spiker.effects?.attack ?? 1;
-    const targetX = free ? clamp(this.players[1].x + rand(-.45, .45) * accuracyWeight, -3.1, 3.1)
-      : clamp(aim * (tip ? 2.5 : 3) + rand(-.5, .5) * accuracyWeight, -3.35, 3.35);
-    const targetZ = free ? rand(-5.2, -3.8) : (tip ? rand(-3.2, -1.2) : rand(-6.8, -3.6));
+    let targetX = free ? clamp(this.players[1].x + rand(-.45, .45) * accuracyWeight, -3.1, 3.1)
+      : clamp(aim * (tip ? 2.5 : 2.4) + rand(-.5, .5) * accuracyWeight, -2.8, 2.8);
+    let targetZ = free ? rand(-5.2, -3.8) : (tip ? rand(-3.2, -1.2) : rand(-5.2, -3.6));
+    const timingMiss = !free && !tip && spiker.human && this.applyAttackTiming(attack, attack.quality, -1);
+    if (timingMiss) { targetX = timingMiss.x ?? targetX; targetZ = timingMiss.z ?? targetZ; }
+    else if (!free && !tip) targetX = this.safeSpikeX(p, targetX);
     const style = Math.abs(targetZ) < 2.2 ? 'poke' : 'cobra';
     if (spiker.anim) Object.assign(spiker.anim, { type: tip || free ? 'tip' : 'spike', aim, style: tip || free ? style : undefined, planned: false });
     if (tip) this.popup('팁!', '#ffd54f', spiker.x, 3.2, spiker.z);
-    this.ball.launch(p, { x: targetX, y: HIT.bump, z: targetZ }, free ? rand(2.0, 2.3) : (tip ? rand(1.4, 1.8) : this.D.aiSpikeT / attackWeight), this.time, free ? 'free' : (tip ? 'tip' : 'spike'));
+    const spikeTime = spiker.human && attack.quality === 'perfect' ? .85 : this.D.aiSpikeT;
+    this.ball.launch(p, { x: targetX, y: HIT.bump, z: targetZ }, free ? rand(2.0, 2.3) : (tip ? rand(1.4, 1.8) : spikeTime / attackWeight), this.time, free ? 'free' : (tip ? 'tip' : 'spike'));
+    if (timingMiss) { this.pendingBlock = null; this.blockZone = null; this.defenseRead = null; spiker.tz = spiker.homeZ; return; }
+    this.ball.keepGroundInCourt();
     if (free) {
       this.blockZone = null; this.pendingBlock = null; this.prepareOurReceive('free', 1);
     } else if (tip) {
@@ -1487,10 +1522,16 @@ export class Match {
       const loser = this.serveFaultOwner; this.serveFaultOwner = null;
       this.pointTo(loser === 'me' ? 'ai' : 'me'); return;
     }
+    if (Math.abs(p.x) > COURT.halfW || Math.abs(p.z) > COURT.halfL) {
+      const lastTeam = this.lastTouch ? (this.lastTouch.who < 2 ? 'me' : 'ai')
+        : (this.ball.p0?.z < 0 ? 'me' : 'ai');
+      this.pointTo(lastTeam === 'me' ? 'ai' : 'me', '아웃!');
+      return;
+    }
     this.pointTo(p.z < 0 ? 'ai' : 'me');
   }
 
-  pointTo(who) {
+  pointTo(who, reason = null) {
     if (this.phase !== 'rally') return;
     this.score[who]++;
     if (who === 'me' && this.deceptionPending) this.popup('속였다!', '#ffd54f', 0, 3.4, 0);
@@ -1508,7 +1549,7 @@ export class Match {
     this.emit('score', this.score); this.emit('point-scored', { team: who, playerIndex: null }); this.emit('sound', who === 'me' ? 'point' : 'lose');
     this.emit('message', this.winner
       ? { text: this.winner === 'me' ? '경기 승리!' : '경기 종료', sub: `${me} : ${ai}` }
-      : { text: who === 'me' ? '득점!' : '실점', sub: `${me} : ${ai}` });
+      : { text: reason ?? (who === 'me' ? '득점!' : '실점'), sub: `${me} : ${ai}` });
   }
 
   skipReplay() {

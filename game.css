@@ -77,7 +77,7 @@ body.slow-motion #slowmo { opacity: 1; visibility: visible; transition: opacity 
 }
 #message.serve-guide #msg-text { font-size: clamp(16px, 1.9vw, 28px); }
 #message.serve-guide #msg-sub { font-size: clamp(12px, 1.1vw, 18px); margin-top: 0; }
-#message.point-focus { top: 13%; z-index: 25; transform: translate(-50%, -50%) scale(1.6); transition: transform .16s ease-out; }
+#message.point-focus { top: 22%; z-index: 25; transform: translate(-50%, -50%) scale(1.15); transition: transform .16s ease-out; }
 body.vs-split #message[data-side="p1"] { left: 25%; width: 46vw; }
 body.vs-split #message[data-side="p2"] { left: 75%; width: 46vw; }
 body.vs-split #message.serve-guide { width: min(44vw, 720px); }

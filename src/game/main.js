@@ -5,8 +5,8 @@ import { DuoTracker } from '../duo-tracker.js';
 import { GESTURES, ORDER } from '../gestures.js';
 import { Renderer } from '../render.js';
 import { initSound, say, setVolume, sfx, startAmbience, startMusic, stopAmbience, stopMusic } from '../sound.js';
-import { Match } from './match.js';
-import { GameRenderer3D } from './draw3d.js?v=20261001f';
+import { Match } from './match.js?v=20261001i';
+import { GameRenderer3D } from './draw3d.js?v=20261001i';
 import { HandCursor, WaveDetector, handFromPose } from '../ui/hand-cursor.js';
 import { actionForCode, keyName, loadBindings } from './controls.js';
 import { Recorder } from '../recorder.js';
@@ -344,6 +344,33 @@ if (new URLSearchParams(location.search).has('debug')) {
       match.ai[1].x = match.ai[1].tx = -.8; match.ai[1].z = match.ai[1].tz = 3.1; match.ai[1].anim = { type: 'underSet', t0: gameTime, planned: true, hold: true };
       match.ball.stopAt({ x: 2.9, y: .58, z: 5.15 });
       match.popup('슬라이딩 디그!', '#ffd54f', defender.x, 2.1, defender.z);
+    } else if (data.command === 'attack-timing-demo') {
+      debugContactFrozen = true; hideCeremonies(); $('message').hidden = true;
+      match.clearPlans(); match.presentation = null; match.phase = 'rally';
+      match._timeScale = 1;
+      match.debugBallAtServeHand = false;
+      const who = data.who === 2 ? 2 : 0, actor = match.actor(who), side = who < 2 ? 1 : -1;
+      actor.x = actor.tx = 0; actor.z = actor.tz = -side;
+      actor.anim = { type: 'spike', t0: gameTime - .5 * ANIM_SECONDS, jump: true };
+      match.lastTouch = null; match.time = gameTime;
+      match.ball.stopAt({ x: 0, y: 2.45, z: -side });
+      const error = Number(data.timingError) || 0;
+      const quality = Math.abs(error) <= match.D.perfect ? 'perfect' : 'good';
+      const attack = { aim: .8, timingError: error, quality };
+      if (who === 0) match.ourSpike(who, quality, false, attack);
+      else {
+        match.pendingBlock = { who: 1, digger: 0, x: 0 };
+        match.aiSpike(actor, false, attack);
+      }
+      const ground = match.ball.groundContact();
+      $('court').dataset.attackLandingDemo = JSON.stringify({ who, error, ground });
+      gameTime = ground.time - .03; match.time = gameTime;
+      court.versusCameraReady = [false, false];
+      if (data.landed) {
+        gameTime = ground.time; match.time = gameTime; match.ballDown(ground);
+        $('message').hidden = false; $('message').classList.remove('serve-guide');
+        document.body.classList.remove('slow-motion');
+      }
     } else if (data.command === 'spike-trajectory-demo') {
       $('gpu-warning').hidden = true; debugContactFrozen = true; $('message').hidden = true; match.presentation = null; match.phase = 'rally'; match.phaseT = gameTime;
       match.clearPlans();

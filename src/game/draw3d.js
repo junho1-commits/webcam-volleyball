@@ -1105,7 +1105,9 @@ export class GameRenderer3D {
     document.body.classList.toggle('vs-split', this.splitActive);
     this.updateCamera(m, t, replaying, replayFrame);
     this.updateVersusCameras(m, t);
-    const b = replaying ? replayFrame.ball : m.ball.pos(t);
+    const currentBall = replaying ? replayFrame.ball : m.ball.pos(t);
+    const groundBall = !replaying && currentBall?.y <= .12 ? m.ball.groundContact() : null;
+    const b = groundBall ?? currentBall;
     const occlusionPoints = [];
     if (b) occlusionPoints.push(new THREE.Vector3(-b.x, Math.max(b.y, this.ball.userData.radius ?? .14), b.z));
     if (m.landing) occlusionPoints.push(new THREE.Vector3(-m.landing.x, .045, m.landing.z));

@@ -1,5 +1,5 @@
 // 3차원 포물선 공. 출발점·도착점·비행 시간으로 궤적을 정한다.
-import { G } from './rules.js';
+import { G, COURT } from './rules.js';
 
 export class Ball {
   constructor() { this.active = false; this.rest = null; this.kind = 'rest'; this.flightStyle = null; this.gravity = G; }
@@ -94,6 +94,36 @@ export class Ball {
   timeAtZ(z) {
     if (!this.active || Math.abs(this.v.z) < 1e-6) return Infinity;
     return this.t0 + (z - this.p0.z) / this.v.z;
+  }
+
+  groundContact(height = .12) {
+    if (!this.active || this.kind !== 'flight') return null;
+    let d;
+    if (this.flightStyle === 'spike' && this.target.y < this.p0.y) {
+      d = (this.tHit - this.t0) * Math.pow((this.p0.y - height) / (this.p0.y - this.target.y), 1 / this.spikeCurveExp);
+    } else {
+      const discriminant = this.v.y ** 2 + 2 * this.gravity * (this.p0.y - height);
+      if (discriminant < 0) return null;
+      d = (this.v.y + Math.sqrt(discriminant)) / this.gravity;
+    }
+    if (!Number.isFinite(d) || d < 0) return null;
+    const time = this.t0 + d;
+    return { ...this.pos(time), y: height, time };
+  }
+
+  keepGroundInCourt() {
+    // target은 리시브 높이의 접촉점이다. 정상 공은 그 뒤의 실제 착지까지 코트 안에 둔다.
+    for (let i = 0; i < 12; i++) {
+      const ground = this.groundContact();
+      if (!ground) return;
+      const x = Math.max(-COURT.halfW + .25, Math.min(COURT.halfW - .25, ground.x));
+      const z = Math.max(-COURT.halfL + .25, Math.min(COURT.halfL - .25, ground.z));
+      if (Math.abs(x - ground.x) + Math.abs(z - ground.z) < 1e-6) return;
+      const T = this.tHit - this.t0, ratio = (ground.time - this.t0) / T;
+      const target = { x: this.p0.x + (x - this.p0.x) / ratio, y: this.target.y,
+        z: this.p0.z + (z - this.p0.z) / ratio };
+      this.launch(this.p0, target, T, this.t0, this.flightStyle);
+    }
   }
 
   stopAt(p) { this.active = false; this.rest = { ...p }; this.kind = 'rest'; this.flightStyle = null; }
