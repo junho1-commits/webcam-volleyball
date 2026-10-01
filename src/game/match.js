@@ -1,6 +1,6 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js?v=20261001j';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261001j';
+import { Ball } from './ball.js?v=20261002a';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261002a';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -103,7 +103,8 @@ export class Match {
 
   actualContactPoint(who, type) {
     const actor = this.actor(who), offset = this.contactOffset(type, who);
-    if (this.autoMove && actor.anim?.contact && actor.anim.type === type) return { ...actor.anim.contact };
+    if (this.autoMove && actor.anim?.contact && actor.anim.type === type) return { ...actor.anim.contact,
+      y: type === 'spike' ? this.contactHeight(who, type) : actor.anim.contact.y };
     const high = ['spike', 'tip', 'block', 'serve', 'serveFloat', 'serveJump'].includes(type);
     const height = this.contactHeight(who, type);
     return { x: actor.x + offset.x, y: height, z: actor.z + offset.z };
@@ -330,9 +331,10 @@ export class Match {
   }
 
   contactHeight(who, type) {
-    const actor = this.actor(who), measured = this.autoMove && actor.contactGeometry?.[type];
+    const actor = this.actor(who), measured = this.autoMove && (type === 'spike' && actor.human && !actor.anim?.jump
+      ? actor.contactGeometry?.serveFloat ?? actor.contactGeometry?.spike : actor.contactGeometry?.[type]);
     if (measured) {
-      const jump = ['spike', 'tip', 'block', 'serveJump'].includes(type)
+      const jump = ['tip', 'block', 'serveJump'].includes(type) || (type === 'spike' && (!actor.human || actor.anim?.jump))
         ? actor.effects.jumpHeight * Math.sin(Math.PI * (CONTACT_K[type] ?? .5)) : 0;
       return measured.y + jump;
     }
@@ -541,15 +543,6 @@ export class Match {
     second.label = p1x != null ? '2P' : (this.competitive ? '2P 짝꿍' : '짝꿍');
     const p1Input = p1x == null ? second.x : clamp(p1x, -3.75, 3.75);
     if (p1x != null && !lockHumanPositions && !this.autoMove) second.x = p1Input;
-    if (this.phase === 'serve-me' && !this.players[this.serverIndex]?.human) {
-      const replacement = this.players.findIndex(p => p.human);
-      if (replacement >= 0) {
-        this.players[this.serverIndex].tz = this.players[this.serverIndex].homeZ;
-        this.serverIndex = replacement;
-        this.placeServer('me', replacement);
-        this.emit('message', null);
-      }
-    }
 
     this.updateDefenseRead(t);
 
@@ -611,6 +604,7 @@ export class Match {
     if (this.phase === 'serve-me') {
       const s = this.players[this.serverIndex];
       this.ball.stopAt(this.serveAnchor ?? { x: s.x + 0.34, y: 1.25, z: s.z + 0.08 });
+      if (!s.human && t - this.phaseT > 1.25) this.beginServeToss('me', this.serverIndex, { source: 'ai', jump: false, power: .6 });
     } else if (this.phase === 'serve-ai') {
       const s = this.ai[this.aiServerIndex];
       this.ball.stopAt(this.serveAnchor ?? { x: s.x - 0.34, y: 1.25, z: s.z - 0.08 });
@@ -638,12 +632,6 @@ export class Match {
       if (this.exp.buffered && t >= this.exp.tHit) this.resolvePlayer(this.exp.buffered);
       else if (t > this.exp.tHit + this.D.late) {
         const actor = this.actor(this.exp.who), landing = this.landing;
-        const tip = this.exp.action === 'spike' ? this.tipProbe?.(this.exp.who, this.exp.tHit) : null;
-        if (tip) {
-          this.resolvePlayer({ type: 'tip', kind: 'tip', aim: tip.aim ?? 0, hand: tip.hand,
-            quality: tip.heldEarly ? 'perfect' : 'good', playerIndex: this.exp.who, t: this.exp.tHit });
-          return;
-        }
         const easyServeHelp = !this.autoMove && this.difficulty === 'easy' && this.exp.action === 'bump'
           && landing?.kind === 'receive' && landing.who === this.exp.who
           && Math.hypot(actor.x - landing.x, actor.z - landing.z) <= .95;
@@ -688,6 +676,7 @@ export class Match {
       return;
     }
     const e = this.exp;
+    if (e?.action === 'spike') return;
     if (!e || e.done || who !== e.who || !e.accepts.includes(type)
       || this.time < e.tHit - this.D.early || this.time > e.tHit + this.D.late) return;
     const overhandReceive = this.difficulty === 'normal' && e.action === 'bump' && type === 'set';
@@ -737,7 +726,7 @@ export class Match {
       return;
     }
     if (this.practiceMode && this.practiceStage === 2 && ['spike', 'serve'].includes(type)) {
-      this.practiceSpikeBuffered = { type: 'spike', t: this.time, jump: true, playerIndex: who };
+      this.practiceSpikeBuffered = { type: 'spike', t: this.time, jump, playerIndex: who };
       if (this.exp && !this.exp.done && this.exp.action === 'spike' && this.exp.who === who) {
         this.exp.buffered = { ...this.practiceSpikeBuffered, t: this.exp.tHit };
         this.practiceSpikeBuffered = null;
@@ -775,7 +764,7 @@ export class Match {
     if (event?.kind !== 'spike') return false;
     const e = this.exp;
     if (!e || e.done || e.action !== 'spike' || e.who !== playerIndex) return false;
-    this.onGesture('spike', { ...event, attackSource: true, jump: true }, playerIndex);
+    this.onGesture('spike', { ...event, attackSource: true }, playerIndex);
     return true;
   }
 
@@ -808,13 +797,9 @@ export class Match {
       p.motionTargetX = p.homeX; p.motionTargetZ = p.homeZ; p.motionReadyUntil = this.time;
     }
     if (who === 'me') {
-      const humans = this.players.map((p, i) => p.human ? i : -1).filter(i => i >= 0);
-      // 같은 팀이 연속 득점하면 같은 선수가 계속 서브한다.
-      // 상대에게서 서브권을 가져올 때만 다음 사람으로 교대한다.
-      if (previousServer !== 'me' || !humans.includes(this.serverIndex)) {
-        this.serverTurn = (this.serverTurn + 1) % Math.max(1, humans.length);
-        this.serverIndex = humans[this.serverTurn] ?? 1;
-      }
+      // 교실 게임의 사용자 지정 순서: 다음 우리 팀 서브는 나 → 파트너 → 나.
+      if (this.practiceMode) this.serverIndex = this.players.findIndex(p => p.human);
+      else { this.serverTurn = (this.serverTurn + 1) % 2; this.serverIndex = this.serverTurn; }
       const s = this.players[this.serverIndex];
       this.placeServer('me', this.serverIndex);
       this.emit('message', null);
@@ -1131,7 +1116,7 @@ export class Match {
     this.beginDefenseRead('me', attacker, this.ball.tHit, this.rivalBlock ? this.rivalBlock.index + 2 : null);
     const done = (q, soft = false, attack = {}) => this.ourSpike(attackerIndex, q, soft, attack);
     if (attacker.human) {
-      this.expect('spike', ['spike', 'serve', 'set', 'bump'], attackerIndex, done);
+      this.expect('spike', ['spike'], attackerIndex, done);
       if (this.practiceMode && this.practiceSpikeBuffered?.playerIndex === attackerIndex) {
         this.exp.buffered = { ...this.practiceSpikeBuffered, t: this.exp.tHit };
         this.practiceSpikeBuffered = null;
@@ -1242,7 +1227,8 @@ export class Match {
   expect(action, accepts, who, next, animType = action) {
     if (this.autoMove) this.ball.contactHoldUntil = this.ball.tHit + this.D.late;
     this.exp = { action, animType, accepts, who, next, tHit: this.ball.tHit, t0: this.ball.t0, hitX: this.ball.target.x, hitZ: this.ball.target.z, done: false, buffered: null };
-    this.planAnim(this.actor(who), animType, this.exp.tHit, action === 'spike', this.ball.target);
+    this.planAnim(this.actor(who), animType, this.exp.tHit, false, this.ball.target);
+    if (action === 'spike') this.actor(who).anim.awaitingInput = true;
   }
 
   computerHit(action, who, probability, next) {
@@ -1271,6 +1257,11 @@ export class Match {
     this.stats[q]++;
     this.popup(q === 'perfect' ? 'PERFECT!' : 'GOOD', q === 'perfect' ? '#ffd54f' : '#81c784', actor.x, 3.0, actor.z);
     if (actor.anim) {
+      if (e.action === 'spike') {
+        actor.anim.type = g.kind === 'tip' || g.type === 'tip' ? 'tip' : 'spike';
+        actor.anim.jump = !!g.jump;
+        actor.anim.awaitingInput = false;
+      }
       if (this.autoMove) actor.anim.t0 = this.time - (CONTACT_K[actor.anim.type] ?? .5) * ANIM_SECONDS;
       actor.anim.planned = false;
       if (this.autoMove && actor.approach) actor.approach.hold = this.time + .04;
@@ -1396,7 +1387,7 @@ export class Match {
     // 네트 앞 블로커는 깊은 공 수비수로 세지 않고, 뒤의 크로스 수비 위치만 보고 공격 방향을 고른다.
     const deepDefenders = !soft && this.pendingBlock ? [this.players[this.pendingBlock.digger]] : this.players;
     const aim = this.chooseAttackAim(deepDefenders);
-    if (spiker.human) this.expect('spike', ['spike', 'serve', 'set', 'bump'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, { ...attack, quality: q }));
+    if (spiker.human) this.expect('spike', ['spike'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, { ...attack, quality: q }));
     else {
       this.planAnim(spiker, 'spike', this.ball.tHit, true, this.ball.target);
       if (spiker.anim) spiker.anim.aim = aim;

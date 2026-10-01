@@ -332,7 +332,9 @@ class Athlete {
       if (anim?.contact && anim.planned && t <= anim.contactUntil) k = Math.min(k + .08 / ANIM, CONTACT_K[type] ?? .5);
       // 자동 접근은 표준 접촉 자세를 기준으로 계산한다. 공격 방향은 공 궤적에 반영한다.
       const poseAim = anim?.contact ? 0 : facing > 0 ? (anim?.aim ?? 0) : -(anim?.aim ?? 0);
-      this.poser.pose(type, k, t, { aim: poseAim, style: anim?.style, phase: anim?.phase,
+      // 서서 하는 공격은 기존 지상 오버핸드 자세를 써서 두 발을 모래에 둔다.
+      const poseType = type === 'spike' && !anim?.jump ? 'serveFloat' : type;
+      this.poser.pose(poseType, k, t, { aim: poseAim, style: anim?.style, phase: anim?.phase,
         since: anim ? Math.max(0, t - anim.t0) : 0 });
       return;
     }
@@ -386,6 +388,7 @@ class Athlete {
     const priority = !approaching && anim && (k < 1 || persistent) && (anim.contact || anim.planned || ['dive', 'dig', 'celebrate', 'sad'].includes(anim.type));
     if (!priority && player.running) type = 'run';
     else if (!priority && (player.atSetPosition || player.movePreparing)) type = 'ready';
+    if (anim?.awaitingInput) type = player.running ? 'run' : (anim.jump ? 'jump' : 'ready');
     const defaultYaw = facing > 0 ? 0 : Math.PI;
     const activeFace = anim && (k < 1 || persistent || anim.planned) ? anim.face : null;
     const faceYaw = activeFace

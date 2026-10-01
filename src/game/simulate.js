@@ -18,7 +18,7 @@ function play(difficulty, skill, maxSeconds = 600) {
     t += DT;
     m.update(t, x, null);
 
-    if (m.phase === 'serve-me' && lastServePhase !== `${m.phase}:${m.phaseT}:${m.score.me}:${m.score.ai}`) {
+    if (m.phase === 'serve-me' && m.players[m.serverIndex].human && lastServePhase !== `${m.phase}:${m.phaseT}:${m.score.me}:${m.score.ai}`) {
       lastServePhase = `${m.phase}:${m.phaseT}:${m.score.me}:${m.score.ai}`;
       m.setServeGeometry({
         toss: { x: x - .3, y: 1.35, z: -7.2 }, hit: { x: x + .3, y: 2.3, z: -7.2 },

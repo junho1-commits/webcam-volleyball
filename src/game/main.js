@@ -5,8 +5,8 @@ import { DuoTracker } from '../duo-tracker.js';
 import { GESTURES, ORDER } from '../gestures.js';
 import { Renderer } from '../render.js';
 import { initSound, say, setVolume, sfx, startAmbience, startMusic, stopAmbience, stopMusic } from '../sound.js';
-import { Match } from './match.js?v=20261001j';
-import { GameRenderer3D } from './draw3d.js?v=20261001j';
+import { Match } from './match.js?v=20261002a';
+import { GameRenderer3D } from './draw3d.js?v=20261002a';
 import { HandCursor, WaveDetector, handFromPose } from '../ui/hand-cursor.js';
 import { actionForCode, keyName, loadBindings } from './controls.js';
 import { Recorder } from '../recorder.js';
@@ -297,9 +297,9 @@ if (new URLSearchParams(location.search).has('debug')) {
     } else if (data.command === 'attack-pose') {
       debugContactFrozen = true;
       court.people.forEach(person => { person.root.visible = true; }); court.people[1].root.visible = false; $('message').hidden = true;
-      match.phase = 'point'; match.phaseT = gameTime; match.lastPoint = 'me'; match.presentation = null;
+      match.phase = 'point'; match.phaseT = gameTime - 2; match.lastPoint = 'me'; match.presentation = null;
       const actor = match.players[0]; actor.x = actor.tx = Number(data.x ?? 0); actor.z = actor.tz = -2.4;
-      actor.anim = { type: data.type === 'tip' ? 'tip' : 'spike', style: data.style, aim: Number(data.aim ?? 0), jump: true,
+      actor.anim = { type: data.type === 'tip' ? 'tip' : 'spike', style: data.style, aim: Number(data.aim ?? 0), jump: data.jump !== false,
         planned: true, hold: true, t0: gameTime - (Number(data.k ?? .5) * ANIM_SECONDS) };
       match.players[1].x = match.players[1].tx = actor.x; match.players[1].z = match.players[1].tz = actor.z; match.players[1].anim = null;
       match.ai.forEach((p, i) => { p.x = p.tx = p.homeX; p.z = p.tz = p.homeZ + i * .5; p.anim = null; });
@@ -439,7 +439,8 @@ if (new URLSearchParams(location.search).has('debug')) {
         .catch(error => { $('court').dataset.contactProbe = JSON.stringify({ error: error.message }); });
     }
     $('court').dataset.debugState = JSON.stringify({ phase: match.phase, score: match.score, log: match.celebrationLog,
-      anims: [...match.players, ...match.ai].map(p => p.anim && ({ type: p.anim.type, style: p.anim.style, aim: p.anim.aim, t0: p.anim.t0 })),
+      anims: [...match.players, ...match.ai].map(p => p.anim && ({ type: p.anim.type, style: p.anim.style, aim: p.anim.aim, t0: p.anim.t0,
+        jump: p.anim.jump, awaitingInput: !!p.anim.awaitingInput })),
       quality: court.quality, calls: court.renderer.info.render.calls, crowd: !!court.crowdView });
   });
   new MutationObserver(() => {
@@ -811,12 +812,6 @@ function begin(m, { shortIntro = false, tutorial = false } = {}) {
   const matchOptions = practice ? { ...options, difficulty: 'easy', target: 99, replay: false } : options;
   match = new Match({ ...matchOptions, autoMove: true, onEvent, competitive: practice ? false : competitive, humanCount: !competitive && (m === 'keyboard-duo' || (m === 'webcam' && activeCameraMode === 'coop')) ? 2 : 1 });
   match.setCharacterChoices(selectedCharacters);
-  match.tipProbe = (who, tHit) => {
-    if (!tracker || mode !== 'webcam') return null;
-    const trackerIndex = match.competitive && who === 2 ? 1 : who;
-    const trackingHit = trackingTime - Math.max(0, gameTime - tHit) * 1000;
-    return tracker.handUp(trackerIndex, trackingHit);
-  };
   if (practice) {
     match.D = { ...match.D, speed: match.D.speed * .6, aiSpikeT: match.D.aiSpikeT / .6 };
     match.practiceMode = true; match.practiceStage = 0;
@@ -1206,11 +1201,17 @@ function updateWebcam(now) {
           if (legacy) match.legacyEasyServe(server);
         }
       } else {
+        // 같은 프레임의 점프를 먼저 반영한 뒤, 전용 내려치기 감지로만 스파이크를 친다.
+        for (const ev of res.events.filter(ev => ev.type === 'jump')) {
+          const actorIndex = match.competitive && ev.playerIndex === 1 ? 2 : ev.playerIndex;
+          match.onGesture('jump', eventForActor(ev, actorIndex), actorIndex);
+        }
         for (const ev of res.attackEvents ?? []) {
           const actorIndex = match.competitive && ev.playerIndex === 1 ? 2 : ev.playerIndex;
           match.onAttack(eventForActor(ev, actorIndex), actorIndex);
         }
         for (const ev of res.events) {
+          if (['jump', 'spike', 'serve'].includes(ev.type)) continue;
           const actorIndex = match.competitive && ev.playerIndex === 1 ? 2 : ev.playerIndex;
           match.onGesture(ev.type, eventForActor(ev, actorIndex), actorIndex);
         }
@@ -1365,6 +1366,7 @@ function loop(now) {
   if (acceptingPlay && !debugContactFrozen) match.update(gameTime, firstX, secondX);
   if (acceptingPlay && !debugContactFrozen) { updateServeGuide(now); updateVoiceCues(); }
   court.draw(match, gameTime);
+  if (debugContactFrozen) court.flash(0);
   document.body.dataset.actionSide = match?.exp?.who >= 2 ? 'p2' : 'p1';
   const pointCloseup = !practice && match.phase === 'point'
     && gameTime - match.phaseT < (match.pointPresentation?.loserEnd ?? 3.6);
