@@ -5,8 +5,8 @@ import { DuoTracker } from '../duo-tracker.js';
 import { GESTURES, ORDER } from '../gestures.js';
 import { Renderer } from '../render.js';
 import { initSound, say, setVolume, sfx, startAmbience, startMusic, stopAmbience, stopMusic } from '../sound.js';
-import { Match } from './match.js?v=20261001i';
-import { GameRenderer3D } from './draw3d.js?v=20261001i';
+import { Match } from './match.js?v=20261001j';
+import { GameRenderer3D } from './draw3d.js?v=20261001j';
 import { HandCursor, WaveDetector, handFromPose } from '../ui/hand-cursor.js';
 import { actionForCode, keyName, loadBindings } from './controls.js';
 import { Recorder } from '../recorder.js';
@@ -171,14 +171,15 @@ if (new URLSearchParams(location.search).has('debug')) {
           maxBallPixels = Math.max(maxBallPixels, Math.hypot(b.point.x - a.point.x, b.point.y - a.point.y));
         }
       }
-      results.push({ spike, maxScaleDelta: Number(maxScaleDelta.toFixed(4)), maxBallPixels: Number(maxBallPixels.toFixed(1)) });
+      results.push({ spike, minScale: Math.min(...samples.map(s => s.scale)), maxScale: Math.max(...samples.map(s => s.scale)),
+        maxScaleDelta: Number(maxScaleDelta.toFixed(4)), maxBallPixels: Number(maxBallPixels.toFixed(1)) });
     }
     gameTime = match.time;
     const actor = match.players[0];
-    match._timeScale = .5; match.exp = { action: 'spike', accepts: ['spike'], who: 0, tHit: gameTime, t0: gameTime - 1.1, done: false };
+    match._timeScale = 1; match.exp = { action: 'spike', accepts: ['spike'], who: 0, tHit: gameTime, t0: gameTime - 1.1, done: false };
     actor.anim = { type: 'spike', t0: gameTime - .5 * ANIM_SECONDS, jump: true, planned: true, hold: true };
     match.ball.stopAt({ x: 0, y: 2.65, z: -1.35 });
-    court.draw(match, gameTime); document.body.classList.add('slow-motion');
+    court.draw(match, gameTime); document.body.classList.toggle('slow-motion', match.slowMotion);
     $('court').dataset.slowMotionProbe = JSON.stringify(results);
     return results;
   };

@@ -1,6 +1,6 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js?v=20261001i';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js';
+import { Ball } from './ball.js?v=20261001j';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261001j';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -79,6 +79,7 @@ export class Match {
     this.touchLog = [];
     this.touchViolations = [];
     this.lastTouch = null;
+    this.teamHitCount = 0;
     this.rallyId = 0;
     this.attackAimHistory = [];
     this.defenseRead = null;
@@ -121,6 +122,15 @@ export class Match {
       this.pointTo(who < 2 ? 'ai' : 'me');
       return false;
     }
+    const sameTeam = previous && (previous.who < 2) === (who < 2);
+    const hits = sameTeam ? this.teamHitCount + 1 : 1;
+    if (hits > 3) {
+      this.popup('4회 터치!', '#ef5350', actor?.x ?? 0, 3, actor?.z ?? 0);
+      this.pointTo(who < 2 ? 'ai' : 'me', '4회 터치!');
+      return false;
+    }
+    this.teamHitCount = hits;
+    entry.teamHits = hits;
     this.touchLog.push(entry);
     this.lastTouch = entry;
     return true;
@@ -773,6 +783,7 @@ export class Match {
     const previousServer = this.servingTeam;
     this.servingTeam = who;
     this.lastTouch = null;
+    this.teamHitCount = 0;
     this.rallyId++;
     this.rallyHighlight = null;
     this.pointReplay = false; this.pointReplayKind = null; this.pointReplayActor = null;
@@ -808,6 +819,7 @@ export class Match {
       this.placeServer('me', this.serverIndex);
       this.emit('message', null);
     } else {
+      if (previousServer !== 'ai' && !this.competitive) this.aiServerIndex = 1 - this.aiServerIndex;
       this.placeServer('ai', this.aiServerIndex);
       this.emit('message', { text: '상대 서브', sub: '분홍색 원을 보고 리시브 준비!' });
     }
@@ -1062,6 +1074,19 @@ export class Match {
     const receiver = this.players[who], setterIndex = 1 - who, setter = this.players[setterIndex];
     const p = this.actualContactPoint(who, receiveType === 'dig' ? 'dig' : 'bump');
     if (!this.recordTouch(who, receiveType, p)) return;
+    this.landing = null;
+    if (receiveType === 'dig') {
+      this.stats.digs++;
+      this.popup('슬라이딩 디그!', '#ffd54f', receiver.x, 2.1, receiver.z);
+      this.emit('dig-success', { team: 'me', playerIndex: who });
+    }
+    if (this.teamHitCount === 2) {
+      // 블록이 첫 터치였다면 이 수비는 두 번째다. 짝꿍에게 바로 올려 세 번째 공격으로 끝낸다.
+      this.chain = { bump: quality, set: quality, setType: 'underSet', attacker: setterIndex,
+        attackTarget: { x: setter.x, z: SPIKE_Z } };
+      this.ourSet(who, setterIndex, quality, p);
+      return;
+    }
     const plan = this.receivePlan?.team === 'me' ? this.receivePlan : null;
     const pass = this.passTarget(plan, quality, receiveType);
     const highReceive = plan?.kind === 'receive';
@@ -1071,12 +1096,7 @@ export class Match {
     const attackTarget = { x: receiver.x, z: SPIKE_Z };
     this.chain = { bump: quality, attacker: who, setter: setterIndex, setType, receiveType, attackTarget,
       freeBall: plan?.kind === 'free' };
-    this.emit('sound', 'hit'); this.landing = null;
-    if (receiveType === 'dig') {
-      this.stats.digs++;
-      this.popup('슬라이딩 디그!', '#ffd54f', receiver.x, 2.1, receiver.z);
-      this.emit('dig-success', { team: 'me', playerIndex: who });
-    }
+    this.emit('sound', 'hit');
     receiver.tz = -4.8;
     setter.tx = pass.x; setter.tz = pass.z;
     if (plan) plan.passMiss = pass.miss;
@@ -1090,10 +1110,10 @@ export class Match {
     else this.computerHit(setType, setterIndex, this.practiceMode ? 1 : 0.98, done);
   }
 
-  ourSet(setterIndex, attackerIndex, quality) {
+  ourSet(setterIndex, attackerIndex, quality, passContact = null) {
     const setter = this.players[setterIndex], attacker = this.players[attackerIndex];
-    const p = this.actualContactPoint(setterIndex, this.chain?.setType ?? 'set');
-    if (!this.recordTouch(setterIndex, this.chain?.setType ?? 'set', p)) return;
+    const p = passContact ?? this.actualContactPoint(setterIndex, this.chain?.setType ?? 'set');
+    if (!passContact && !this.recordTouch(setterIndex, this.chain?.setType ?? 'set', p)) return;
     if (this.chain) this.chain.set = quality;
     const under = this.chain?.setType === 'underSet';
     setter.roleLabel = null; setter.readyWaiting = false; setter.atSetPosition = false; this.setPosition = null;
@@ -1103,7 +1123,7 @@ export class Match {
     const spikeT = 1.2 / this.D.speed;
     const spikeTarget = this.contactPoint(attackerIndex, 'spike', this.time + spikeT);
     this.ball.launch(p, spikeTarget, spikeT, this.time);
-    if (this.competitive) {
+    if (!this.practiceMode) {
       const index = Math.abs(this.ai[0].x - attacker.x) <= Math.abs(this.ai[1].x - attacker.x) ? 0 : 1;
       this.rivalBlock = { index, x: attacker.x };
       this.ai[index].tx = attacker.x; this.ai[index].tz = .45;
@@ -1162,7 +1182,7 @@ export class Match {
     if (timingMiss) { this.rivalBlock = null; this.defenseRead = null; return; }
     this.ball.keepGroundInCourt();
     let receiver = null;
-    if (this.competitive && !tip && this.rivalBlock) {
+    if (!tip && this.rivalBlock) {
       const { index, x } = this.rivalBlock, who = index + 2;
       receiver = 1 - index;
       const tHit = Math.max(this.time, this.ball.timeAtZ(0) + .05);
@@ -1179,12 +1199,12 @@ export class Match {
     if (receiver == null) receiver = this.defenseRead?.attackingTeam === 'me'
       ? this.defenseRead.defenderIndex
       : (Math.abs(this.ai[0].x - tx) <= Math.abs(this.ai[1].x - tx) ? 0 : 1);
-    // 타이밍이 맞은 강한 하강 공격은 단계마다 수비 확률을 0.10씩 낮춘다.
-    const freeBallAttackBonus = this.chain?.freeBall ? .45 : 0;
+    // 강타의 이점을 유지하면서 준비된 상대가 디그 후 반격할 여지를 준다.
+    const freeBallAttackBonus = this.chain?.freeBall ? .10 : 0;
     // 읽기가 맞았을 때의 +0.15는 기존 난이도의 기본 수비율을 올리지 않고,
     // 방향을 읽어 움직인 보상으로만 작동하게 상쇄한다.
     const balance = this.defenseRead?.attackingTeam === 'me' ? .15 : 0;
-    const defenseChance = this.D.aiDig - balance - .10 * Math.max(0, power - 1) - (attackWeight - 1) * .75 - openCourtPenalty - freeBallAttackBonus + readAdjustment;
+    const defenseChance = this.D.aiDig - balance - .06 * Math.max(0, power - 1) - (attackWeight - 1) * .35 - openCourtPenalty - freeBallAttackBonus + readAdjustment;
     this.aiReceive(tip ? .94 : defenseChance, receiver, tip, tip ? 'tip' : 'spike');
   }
 
@@ -1323,8 +1343,14 @@ export class Match {
     const receiverWho = 2 + this.ai.indexOf(r);
     const p = this.actualContactPoint(receiverWho, receiveType === 'dig' ? 'dig' : 'bump');
     if (!this.recordTouch(receiverWho, receiveType, p)) return;
+    if (receiveType === 'dig') this.emit('dig-success', { team: 'ai', playerIndex: receiverWho });
+    if (this.teamHitCount === 2) {
+      this.aiChain = { setType: 'underSet', quality, receiveType,
+        attacker: this.ai.indexOf(setter), weakAttackChance: .35 };
+      this.aiSet(r, setter, p);
+      return;
+    }
     this.emit('sound', 'hit');
-    if (receiveType === 'dig') this.emit('dig-success', { team: 'ai', playerIndex: 2 + this.ai.indexOf(r) });
     const plan = this.receivePlan?.team === 'ai' ? this.receivePlan : null;
     const pass = this.passTarget(plan, quality, receiveType);
     const highReceive = plan?.kind === 'receive';
@@ -1335,7 +1361,7 @@ export class Match {
     if (plan) plan.passMiss = pass.miss;
     const who = 2 + this.ai.indexOf(setter), setT = highReceive ? 1.7 : (useUnder ? (receiveType === 'dig' ? rand(.58, .70) : .72) : 1.25 / this.D.speed);
     this.setPosition = { x: setter.tx, z: setter.tz, who, human: !!setter.human, team: 'ai' };
-    const recoveryWeakChance = { easy: .70, normal: .50, hard: .25 }[this.difficulty] ?? .50;
+    const recoveryWeakChance = { easy: .90, normal: .75, hard: .40 }[this.difficulty] ?? .75;
     this.aiChain = {
       setType, quality, receiveType, attacker: this.ai.indexOf(r),
       attackTarget: { x: r.x, z: -SPIKE_Z },
@@ -1349,10 +1375,10 @@ export class Match {
     else { this.planAnim(setter, setType, this.ball.tHit, false, this.ball.target); this.schedule(this.ball.tHit, () => this.aiSet(setter, r)); }
   }
 
-  aiSet(setter, spiker) {
+  aiSet(setter, spiker, passContact = null) {
     const setterWho = 2 + this.ai.indexOf(setter);
-    const p = this.actualContactPoint(setterWho, this.aiChain?.setType ?? 'set');
-    if (!this.recordTouch(setterWho, this.aiChain?.setType ?? 'set', p)) return;
+    const p = passContact ?? this.actualContactPoint(setterWho, this.aiChain?.setType ?? 'set');
+    if (!passContact && !this.recordTouch(setterWho, this.aiChain?.setType ?? 'set', p)) return;
     const under = this.aiChain?.setType === 'underSet';
     setter.roleLabel = null; setter.readyWaiting = false; setter.atSetPosition = false; this.setPosition = null;
     this.emit('sound', 'hit');
@@ -1441,7 +1467,9 @@ export class Match {
 
   autoBlock(who) {
     if (!this.blockExp || this.blockExp.done) return;
-    const chance = this.D.mateDig * 0.75;
+    const chance = who >= 2 && !this.competitive
+      ? { easy: .15, normal: .30, hard: .55 }[this.difficulty]
+      : this.D.mateDig * .75;
     if (Math.random() < chance) this.resolveBlock({ playerIndex: who, t: this.blockExp.tHit, type: 'block', jump: true });
     else this.blockExp.done = true;
   }
@@ -1581,13 +1609,13 @@ export class Match {
   popup(text, color, x, y, z = 0) { this.popups.push({ text, color, x, y, z, t0: this.time }); }
 
   get slowMotionRequested() {
-    return !!(this.exp && !this.exp.done && this.exp.action === 'spike' && this.time >= this.exp.tHit - 1.1);
+    return !!(this.practiceMode && this.phase === 'rally' && this.exp && !this.exp.done
+      && this.exp.action === 'spike' && this.time >= this.exp.tHit - .20 && this.time <= this.exp.tHit + .05);
   }
 
   updateTimeScale(realDt) {
-    const target = this.slowMotionRequested ? .5 : 1;
-    const duration = target < this._timeScale ? .25 : .2;
-    const maxStep = .5 * Math.max(0, realDt) / duration;
+    const target = this.slowMotionRequested ? .85 : 1;
+    const maxStep = .15 * Math.max(0, realDt) / .08;
     if (this._timeScale < target) this._timeScale = Math.min(target, this._timeScale + maxStep);
     else if (this._timeScale > target) this._timeScale = Math.max(target, this._timeScale - maxStep);
     if (Math.abs(this._timeScale - target) < 1e-12) this._timeScale = target;
