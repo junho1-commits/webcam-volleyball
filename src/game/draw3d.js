@@ -9,7 +9,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { ANIM_SECONDS, COURT } from './rules.js';
-import { CONTACT_K, RigPoser } from './rig-poser.js?v=20261006a';
+import { CONTACT_K, RigPoser } from './rig-poser.js?v=20261006b';
 import { createVolleyball } from './volleyball-mesh.js';
 import { installGwangalli } from './gwangalli-scene.js';
 import { CameraDirector } from './camera-director.js';
@@ -970,13 +970,19 @@ export class GameRenderer3D {
       const partnerRoot = partner.model ?? partner.root;
       const partnerDistance = camera.position.distanceTo(partner.root.position);
       const selfDistance = camera.position.distanceTo(self.root.position);
+      // 몸 가운데 세 점만 보면 짝꿍이 몸 한쪽 절반을 가리는 경우를 놓친다(2026-10-06 측정: 1P 화면 가림의 80%).
+      // 카메라 기준 좌우로 어깨·머리 옆 점도 함께 본다.
+      const side = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).setY(0).normalize();
+      const bodyPoints = [selfRoot, torso, head,
+        torso.clone().addScaledVector(side, .3), torso.clone().addScaledVector(side, -.3),
+        head.clone().addScaledVector(side, .22), head.clone().addScaledVector(side, -.22)];
       // 큰 머리 캐릭터 가장자리에서 반투명이 빠르게 켜졌다 꺼지지 않도록 약간의 여유를 둔다.
-      const occluding = partnerDistance + .5 < selfDistance && occludes(camera, partnerRoot, [selfRoot, torso, head], .08);
+      const occluding = partnerDistance + .5 < selfDistance && occludes(camera, partnerRoot, bodyPoints, .08);
       const state = this.versusPartnerGhosts[slot];
       const request = occluding ? .35 : 1;
       state.occluding = occluding;
       if (request !== state.request) { state.request = request; state.requestSince = now; }
-      const hold = request < 1 ? .12 : .30;
+      const hold = request < 1 ? .08 : .30;   // 가리면 0.08초 뒤 반투명(2026-10-06: .12 → .08), 풀릴 때는 0.3초 기다림
       if (request !== state.target && now - state.requestSince >= hold) {
         state.from = state.opacity; state.target = request; state.startedAt = now;
       }
@@ -1430,7 +1436,25 @@ export class GameRenderer3D {
       s.visible = distance >= 2.5;
       const scale = THREE.MathUtils.clamp(distance / 10, .4, 1.6);
       s.scale.set((this.splitActive ? 1.55 : 3.2) * scale, (this.splitActive ? .46 : .8) * scale, 1);
+      // 나눈 화면에서는 팝업 글자가 자기 반쪽 화면 밖(가운데 선·바깥 끝)으로 잘리지 않게 안쪽으로 옮긴다
+      // (2026-10-06 Claude: 서브 때 "완벽!"·"플로터 서브"가 서버 머리 위에 떠서 2.5%가 잘렸다)
+      if (this.splitActive && owner != null && s.visible) this.keepPopupInView(s, popupCamera);
     });
+  }
+
+  keepPopupInView(sprite, camera, margin = .06) {
+    camera.updateMatrixWorld();
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const halfW = sprite.scale.x / 2;
+    const ndcX = offset => sprite.position.clone().addScaledVector(right, offset).project(camera).x;
+    const limit = 1 - 2 * margin;            // 반쪽 화면 안쪽 여백(가로 6%)
+    const left = ndcX(-halfW), rightEdge = ndcX(halfW);
+    if (!Number.isFinite(left) || !Number.isFinite(rightEdge)) return;
+    const over = Math.max(0, rightEdge - limit) - Math.max(0, -limit - left);
+    if (!over) return;
+    // 화면 가로 1(ndc 기준 2)이 세계에서 몇 m인지로 옮길 거리를 구한다
+    const perNdc = sprite.scale.x / Math.max(1e-4, rightEdge - left);
+    sprite.position.addScaledVector(right, -over * perNdc);
   }
 }
 

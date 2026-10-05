@@ -1,6 +1,6 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js?v=20261006a';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261006a';
+import { Ball } from './ball.js?v=20261006b';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261006b';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
