@@ -9,7 +9,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { ANIM_SECONDS, COURT } from './rules.js';
-import { CONTACT_K, RigPoser } from './rig-poser.js';
+import { CONTACT_K, RigPoser } from './rig-poser.js?v=20261005a';
 import { createVolleyball } from './volleyball-mesh.js';
 import { installGwangalli } from './gwangalli-scene.js';
 import { CameraDirector } from './camera-director.js';
@@ -335,7 +335,7 @@ class Athlete {
       // 서서 하는 공격은 기존 지상 오버핸드 자세를 써서 두 발을 모래에 둔다.
       const poseType = type === 'spike' && !anim?.jump ? 'serveFloat' : type;
       this.poser.pose(poseType, k, t, { aim: poseAim, style: anim?.style, phase: anim?.phase,
-        since: anim ? Math.max(0, t - anim.t0) : 0 });
+        since: anim ? Math.max(0, t - anim.t0) : 0, speed: this.moveSpeed });   // speed: 달리기 걸음 박자·보폭용(m/s)
       return;
     }
     if (!this.mixer) return;
@@ -413,6 +413,7 @@ class Athlete {
     this.root.position.y = gestureJump
       ? this.effects.jumpHeight * gesturePulse
       : (bodyJumping || ['jump', 'block', 'serveJump', 'tip'].includes(type) || (type === 'spike' && anim?.jump) ? this.effects.jumpHeight * pulse : 0);
+    this.moveSpeed = player.moveSpeed ?? 0;
     this.pose(type, k, t);
     // 도형 캐릭터용 몸통 기울기를 뼈대 모델에 중복 적용하지 않는다.
     if (this.poser) this.root.rotation.z = 0;

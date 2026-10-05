@@ -9,7 +9,8 @@ export const SERVE = {
   gravity: G, apexAboveReach: 1.0, apexTowardNet: 0.3, apexTowardHitHand: 0.15,
   jumpReach: 0.45, timingRange: 0.6, goodWindow: 0.15, lateralMiss: 0.7,
   floatIdealT: 1.55, jumpIdealT: 1.75,
-  perfectSeconds: 0.25, goodSeconds: 0.5, earliestHit: 0.8,
+  // earliestHit: 2026-10-05 0.8 → 0.4. 선생님의 실제 점프 서브 녹화에 토스 0.6초 만에 친 서브가 있었는데 "헛스윙!"으로 거절됐다.
+  perfectSeconds: 0.25, goodSeconds: 0.5, earliestHit: 0.4, reachBand: 0.55,
   expireSeconds: 2.6, dropHeight: 1.0, returnSeconds: 0.3,
 };
 

@@ -603,14 +603,26 @@ export class RigPoser {
       this.arms([lerp3(ARMS.bump[0], ARMS.bumpUp[0], push), lerp3(ARMS.bump[1], ARMS.bumpUp[1], push)]);
       this.legs(LEGS.low);
     } else if (type === 'run') {
-      // 달리기: k는 쓰지 않고 시간으로 다리·팔을 번갈아 흔든다(초당 약 3걸음). 몸은 살짝 앞으로 숙인다
-      const ph = t * 10;
-      const leg = a => [[0.06, -Math.cos(a), Math.sin(a)], [0.04, -Math.cos(a) * 0.9, Math.sin(a) - (a < 0 ? 0.6 : 0.1)]];
-      const arm = a => [[0.22, -Math.cos(a), Math.sin(a)], [0.12, -0.15, 1]];
-      const swing = 0.6 * Math.sin(ph);
-      this.spine(SPINE.run);
-      this.arms(arm(-swing), arm(swing));
-      this.legs(leg(swing), leg(-swing));
+      // 달리기(2026-10-05 선생님: "수비할 때 걷기만 하지 말고 빠르게 뛰어"): 속도(opts.speed, m/s)에 맞춰 걸음 박자·보폭·몸 숙임·팔 흔들기가 커진다.
+      // 예전에는 속도와 상관없이 초당 3걸음, 같은 크기로 흔들어 7m/s로 움직여도 땅 위를 미끄러지는 걷기처럼 보였다.
+      // 걸음 위상은 시간을 누적해 박자가 바뀌어도 자세가 튀지 않게 한다.
+      const speed = Math.max(0.8, Math.min(8, opts.speed ?? 5));
+      const u = Math.min(1, (speed - 0.8) / 5.5);                      // 0 = 걷기, 1 = 전력 질주
+      const stepsPerSec = 2.4 + 2.8 * u;                               // 2.4걸음/초 → 5.2걸음/초
+      const dtr = this.lastPoseT == null ? 0 : Math.max(0, Math.min(0.1, t - this.lastPoseT));
+      this.runPhase = (this.runPhase ?? 0) + Math.PI * stepsPerSec * dtr;   // 한 바퀴 = 두 걸음
+      const ph = this.runPhase;
+      const reach = 0.38 + 0.62 * u;                                   // 다리 앞뒤로 벌리는 정도(rad)
+      const flex = 0.5 + 1.0 * u;                                      // 무릎을 접어 발뒤꿈치를 엉덩이 쪽으로 올리는 정도
+      // a: 허벅지 각(앞 +), 무릎은 다리가 앞으로 나오는 중(cos>0)에 가장 많이 접힌다
+      const leg = s => { const a = reach * Math.sin(ph + s), f = flex * Math.max(0, Math.cos(ph + s)) + 0.12, b = a - f;
+        return [[0.06, -Math.cos(a), Math.sin(a)], [0.04, -Math.cos(b), Math.sin(b)]]; };
+      // 팔은 반대 다리와 함께 흔들고, 팔꿈치는 약 85°로 굽힌다
+      const arm = s => { const a = (0.35 + 0.65 * u) * Math.sin(ph + s), e = a + 1.45;
+        return [[0.22, -Math.cos(a), Math.sin(a)], [0.12, -Math.cos(e), Math.sin(e)]]; };
+      this.spine(lerp3(SPINE.up, [0, 0.8, 0.6], Math.min(1, 0.25 + 0.75 * u)));   // 빠를수록 몸을 앞으로 숙인다
+      this.arms(arm(Math.PI), arm(0));
+      this.legs(leg(0), leg(Math.PI));
     } else if (type === 'underSet') {
       // 0~0.3 무릎을 굽혀 팔을 앞에 모음 → k=0.45 공을 받음 → 0.75까지 가슴 높이로 부드럽게 들어 올리며 일어남
       // 배구 언더 토스: 공 밑으로 깊게 앉아(0~0.3) 팔 플랫폼을 고정하고 기다림 → 닿는 순간(0.45)부터 팔은 거의 그대로,

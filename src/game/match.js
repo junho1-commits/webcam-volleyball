@@ -1,11 +1,12 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js?v=20261002a';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261002a';
+import { Ball } from './ball.js?v=20261005a';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261005a';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // rig-poser.js의 공개 접촉 프레임과 같은 값. 경기 로직의 Node 시험이 Three.js에 의존하지 않게 둔다.
+const APPROACH_SPEED = 4.6;   // 공 쪽으로 달려가는 평균 속도(m/s). 부드러운 출발·정지로 가장 빠를 때 약 7m/s
 const CONTACT_K = { bump: .45, underSet: .45, set: .45, dig: .45, spike: .5, tip: .5, block: .5, serveFloat: .35, serveJump: .35, serve: .35, dive: .4 };
 const CONTACT_HEIGHT = { ...HIT, underSet: .9, dig: .55, tip: HIT.spike };
 const SOLO_CELEBRATIONS = ['fistPump', 'skyKiss', 'itsMe', 'flex', 'pointSky'];
@@ -355,8 +356,13 @@ export class Match {
       const offset = this.contactOffset(type, who, face);
       actor.tx = contact.x - offset.x; actor.tz = contact.z - offset.z;
       if (['spike', 'tip', 'block'].includes(type)) actor.anim.face = { x: actor.tx, z: actor.tz + (who < 2 ? 1000 : -1000) };
+      // 공을 보면 곧바로 달려가 일찍 도착해 자세를 잡고 기다린다(2026-10-05 선생님: "수비할 때 걷기만 하지 말고 빠르게 뛰어").
+      // 예전에는 공이 도착하는 시각까지 이동을 늘려 1.2~1.7초 내내 걷는 속도(중앙값 2.5m/s)였다.
+      // 평균 APPROACH_SPEED, 부드럽게 출발·정지하므로 가장 빠를 때는 평균의 1.5배(약 7m/s).
+      const arriveBy = Math.max(this.time + .01, tHit - .06);
+      const dashEnd = this.time + Math.max(.3, Math.hypot(actor.tx - actor.x, actor.tz - actor.z) / APPROACH_SPEED);
       actor.approach = { x: actor.x, z: actor.z, tx: actor.tx, tz: actor.tz,
-        start: this.time, end: Math.max(this.time + .01, tHit - .06), hold: tHit + this.D.late + .08 };
+        start: this.time, end: Math.min(arriveBy, dashEnd), hold: tHit + this.D.late + .08 };
       actor.anim.contact = { ...contact };
       actor.anim.contactUntil = actor.human ? tHit + this.D.late : tHit;
       delete actor.magnet; delete actor.slide;
@@ -569,13 +575,16 @@ export class Match {
       p.moveRemaining = distance;
       p.movePreparing = distance > .05 && t < (p.motionReadyUntil ?? 0);
       const maxSpeed = 7 * (p.effects?.agility ?? 1);
-      const desiredSpeed = p.movePreparing ? 0 : Math.min(maxSpeed, Math.sqrt(2 * 8 * distance));
+      // 우리 팀(학생·짝꿍)은 가속·감속을 8 → 15·12m/s²로 올려 1~2m짜리 짧은 이동도 걷지 않고 바로 달려 나간다(2026-10-05).
+      // 상대 컴퓨터는 예전 값 그대로 둔다: 같이 올리면 상대 수비가 좋아져 중급 학생 승수가 더 떨어진다(시뮬레이션 측정).
+      const mine = this.players.includes(p);
+      const desiredSpeed = p.movePreparing ? 0 : Math.min(maxSpeed, Math.sqrt(2 * (mine ? 12 : 8) * distance));
       const desiredVx = distance > .001 && (!p.human || this.autoMove) ? dx / distance * desiredSpeed : 0;
       const desiredVz = distance > .001 ? dz / distance * desiredSpeed : 0;
       p.vx ??= 0; p.vz ??= 0;
-      const steer = 1 - Math.exp(-dt / .12);
+      const steer = 1 - Math.exp(-dt / (mine ? .07 : .12));
       let changeX = (desiredVx - p.vx) * steer, changeZ = (desiredVz - p.vz) * steer;
-      const change = Math.hypot(changeX, changeZ), maxChange = 8 * dt;
+      const change = Math.hypot(changeX, changeZ), maxChange = (mine ? 15 : 8) * dt;
       if (change > maxChange && change > 0) { changeX *= maxChange / change; changeZ *= maxChange / change; }
       p.vx += changeX; p.vz += changeZ;
       if (p.human && !this.autoMove) p.vx = 0;
@@ -676,7 +685,7 @@ export class Match {
       return;
     }
     const e = this.exp;
-    if (e?.action === 'spike') return;
+    if (e?.action === 'spike' && !e.push) return;
     if (!e || e.done || who !== e.who || !e.accepts.includes(type)
       || this.time < e.tHit - this.D.early || this.time > e.tHit + this.D.late) return;
     const overhandReceive = this.difficulty === 'normal' && e.action === 'bump' && type === 'set';
@@ -748,7 +757,7 @@ export class Match {
         : (e.action === 'set' ? '두 손을 이마 위로!' : null);
       if (text) { e.poseWarned = true; this.popup(text, '#ffb74d', actor.x, 3.2, actor.z); }
     }
-    if (type === 'tip' && e && !e.done && e.action === 'spike' && who === e.who && this.time >= e.tHit - this.D.early) {
+    if (type === 'tip' && e && !e.done && (e.action === 'spike' || e.secondAttack) && who === e.who && this.time >= e.tHit - this.D.early) {
       const tip = { ...g, kind: 'tip', quality: Math.abs(this.time - e.tHit) <= this.D.perfect ? 'perfect' : 'good' };
       if (this.time > e.tHit) this.resolvePlayer(tip); else e.buffered = tip;
       return;
@@ -763,7 +772,7 @@ export class Match {
   onAttack(event, playerIndex = event.playerIndex) {
     if (event?.kind !== 'spike') return false;
     const e = this.exp;
-    if (!e || e.done || e.action !== 'spike' || e.who !== playerIndex) return false;
+    if (!e || e.done || !(e.action === 'spike' || e.secondAttack) || e.who !== playerIndex) return false;
     this.onGesture('spike', { ...event, attackSource: true }, playerIndex);
     return true;
   }
@@ -927,7 +936,11 @@ export class Match {
       return false;
     }
     const idealT = didJump ? toss.jumpIdeal : toss.floatIdeal;
-    const timingError = Math.abs(elapsed - idealT);
+    let timingError = Math.abs(elapsed - idealT);
+    // 공이 칠 높이 근처(손 높이보다 reachBand 아래까지)에 떠 있을 때 친 서브는 시간이 이상과 달라도 최소 '좋음'이다.
+    // 스파이크 서브는 시간만 보면 이른 타이밍(1.1초 전)·늦은 타이밍(2.3초 뒤)에 절반이 네트·아웃으로 실패했다(2026-10-05 측정).
+    const handReach = didJump ? toss.jumpReach : toss.standReach;
+    if (p && p.y >= handReach - SERVE.reachBand) timingError = Math.min(timingError, SERVE.goodSeconds - .01);
     const timing = forcedTiming ?? (timingError <= SERVE.perfectSeconds ? 1 : timingError <= SERVE.goodSeconds ? .6 : .25);
     if (source === 'webcam' && this.serveHitAnchor) {
       const lateral = Math.abs(p.x - this.serveHitAnchor.x);
@@ -1091,8 +1104,46 @@ export class Match {
     const setTarget = this.contactPoint(setterIndex, setType, this.time + setT);
     this.ball.launch(p, setTarget, setT, this.time);
     const done = q => this.ourSet(setterIndex, who, q);
-    if (setter.human) this.expect('set', ['set', 'bump'], setterIndex, done, setType);
+    if (setter.human) {
+      // 토스 차례: 두 손 토스 → 짝꿍이 공격. 내려치거나 팁을 하면 **이단 공격**(두 번째 터치로 바로 상대에게 넘기기).
+      // 2026-10-05 선생님: "우리편이 수비한 뒤 내가 상대에게 이단으로 넘기는 게 되도록"
+      this.expect('set', ['set', 'bump', 'spike', 'tip'], setterIndex,
+        (q, soft, g = {}) => (g.type === 'spike' || g.type === 'tip' || g.kind === 'tip') ? this.ourSecondAttack(setterIndex, q, g) : done(q),
+        setType, { secondAttack: true });
+      if (!this.practiceMode && !this.secondAttackHinted && this.difficulty !== 'hard') {
+        this.secondAttackHinted = true;
+        this.popup('내려치면 이단 공격!', '#ffb74d', setter.x, 3.3, setter.z);
+      }
+    }
     else this.computerHit(setType, setterIndex, this.practiceMode ? 1 : 0.98, done);
+  }
+
+  // 이단 공격: 짝꿍이 받은 공(첫 터치)을 내가 두 번째 터치로 바로 상대 코트에 넘긴다(비치발리볼의 투터치 공격).
+  // 공은 토스를 기다리던 그 자리에서 출발하므로 위치가 튀지 않는다. 느린 포물선이라 상대가 받을 수 있다.
+  ourSecondAttack(who, quality, attack = {}) {
+    const a = this.players[who];
+    const p = { ...(this.ball.pos(this.time) ?? this.ball.target) };
+    if (!this.recordTouch(who, 'spike', p)) return;
+    const tip = attack.type === 'tip' || attack.kind === 'tip';
+    const aim = clamp(Number.isFinite(attack.aim) ? attack.aim : 0, -1, 1);
+    this.markAttack(tip ? 'tip' : 'spike', 'me', who);
+    if (tip) this.stats.tips++; else this.stats.spikes++;
+    this.emit('sound', tip ? 'hit' : 'spike');
+    this.setPosition = null; this.chain = null;
+    a.roleLabel = null; a.readyWaiting = false; a.atSetPosition = false;
+    const spread = (quality === 'perfect' ? .35 : .8) * (a.effects?.accuracyError ?? 1);
+    const tz = tip ? rand(1.4, 3.0) : rand(3.2, 6.2);
+    const tx = clamp(aim * 2.6 + rand(-spread, spread), -3.0, 3.0);
+    const T = tip ? rand(1.4, 1.8) : (quality === 'perfect' ? rand(1.25, 1.4) : rand(1.45, 1.7));
+    if (a.anim) Object.assign(a.anim, { type: tip ? 'tip' : 'spike', aim, style: tip ? (tz < 2.2 ? 'poke' : 'cobra') : undefined, planned: false });
+    this.popup(tip ? '팁!' : '이단 공격!', '#ffb74d', a.x, 3.2, a.z);
+    this.ball.launch(p, { x: tx, y: HIT.bump, z: tz }, T, this.time, null);
+    this.ball.keepGroundInCourt();
+    this.rivalBlock = null; this.defenseRead = null;
+    const receiver = Math.abs(this.ai[0].x - tx) <= Math.abs(this.ai[1].x - tx) ? 0 : 1;
+    // 느린 공이라 강타보다 받기 쉽다. 정확하게(PERFECT) 치면 받기 어렵다.
+    const chance = clamp(this.D.aiDig + .08 - (quality === 'perfect' ? .12 : 0), .25, .85);
+    this.aiReceive(tip ? .94 : chance, receiver, tip, 'attack');
   }
 
   ourSet(setterIndex, attackerIndex, quality, passContact = null) {
@@ -1116,7 +1167,15 @@ export class Match {
     this.beginDefenseRead('me', attacker, this.ball.tHit, this.rivalBlock ? this.rivalBlock.index + 2 : null);
     const done = (q, soft = false, attack = {}) => this.ourSpike(attackerIndex, q, soft, attack);
     if (attacker.human) {
-      this.expect('spike', ['spike'], attackerIndex, done);
+      // 블록(첫 터치) → 짝꿍 수비(두 번째) 뒤에는 내가 세 번째 터치라 공격만 가능하다(passContact가 있는 경우).
+      // 이때 토스(두 손 올리기)·리시브 동작을 해도 실패 대신 팁으로 넘겨 준다(2026-10-05 선생님: "내가 블로킹, 우리편이 수비했을 때 토스가 잘 안 된다").
+      // 평소 세 번째 터치는 의도한 내려치기만 인정한다(10월 2일 규칙 유지).
+      const push = !!passContact;
+      this.expect('spike', push ? ['spike', 'set', 'bump'] : ['spike'], attackerIndex, done, 'spike', { push });
+      if (push && !this.pushHinted && !this.practiceMode) {
+        this.pushHinted = true;
+        this.popup('세 번째 터치! 넘기세요', '#ffb74d', attacker.x, 3.3, attacker.z);
+      }
       if (this.practiceMode && this.practiceSpikeBuffered?.playerIndex === attackerIndex) {
         this.exp.buffered = { ...this.practiceSpikeBuffered, t: this.exp.tHit };
         this.practiceSpikeBuffered = null;
@@ -1224,9 +1283,10 @@ export class Match {
     }, 0);
   }
 
-  expect(action, accepts, who, next, animType = action) {
+  // options: { secondAttack } 토스 차례에 내려치면 이단 공격 · { push } 세 번째 터치에 토스 동작을 해도 넘긴다
+  expect(action, accepts, who, next, animType = action, options = {}) {
     if (this.autoMove) this.ball.contactHoldUntil = this.ball.tHit + this.D.late;
-    this.exp = { action, animType, accepts, who, next, tHit: this.ball.tHit, t0: this.ball.t0, hitX: this.ball.target.x, hitZ: this.ball.target.z, done: false, buffered: null };
+    this.exp = { action, animType, accepts, who, next, tHit: this.ball.tHit, t0: this.ball.t0, hitX: this.ball.target.x, hitZ: this.ball.target.z, done: false, buffered: null, ...options };
     this.planAnim(this.actor(who), animType, this.exp.tHit, false, this.ball.target);
     if (action === 'spike') this.actor(who).anim.awaitingInput = true;
   }
@@ -1256,8 +1316,9 @@ export class Match {
     const q = g.quality ?? (Math.abs(g.t - e.tHit) <= this.D.perfect ? 'perfect' : 'good');
     this.stats[q]++;
     this.popup(q === 'perfect' ? 'PERFECT!' : 'GOOD', q === 'perfect' ? '#ffd54f' : '#81c784', actor.x, 3.0, actor.z);
+    const secondAttackHit = !!e.secondAttack && ['spike', 'tip'].includes(g.type);   // 토스 차례에 내려치기 = 이단 공격
     if (actor.anim) {
-      if (e.action === 'spike') {
+      if (e.action === 'spike' || secondAttackHit) {
         actor.anim.type = g.kind === 'tip' || g.type === 'tip' ? 'tip' : 'spike';
         actor.anim.jump = !!g.jump;
         actor.anim.awaitingInput = false;
@@ -1273,7 +1334,7 @@ export class Match {
       if (g.kind === 'tip' || g.type === 'tip') e.next(q, true, { ...g, kind: 'tip' });
       else if (!['spike', 'serve'].includes(g.type)) e.next(q, true, g);
       else e.next(q, false, g);
-    } else e.next(q);
+    } else e.next(q, false, g);   // 3번째 인자: 어떤 동작이었는지(토스 차례의 이단 공격 구분용)
   }
 
   playerMiss(who, text) {
