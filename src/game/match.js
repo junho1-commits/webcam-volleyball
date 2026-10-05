@@ -1,6 +1,6 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
-import { Ball } from './ball.js?v=20261005a';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261005a';
+import { Ball } from './ball.js?v=20261006a';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261006a';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -25,7 +25,7 @@ export class Match {
     this.time = 0;
     this._timeScale = 1;
     this.score = { me: 0, ai: 0 };
-    this.stats = { perfect: 0, good: 0, miss: 0, spikes: 0, tips: 0, blocks: 0, stuffBlocks: 0, digs: 0 };
+    this.stats = { perfect: 0, good: 0, miss: 0, assist: 0, spikes: 0, tips: 0, blocks: 0, stuffBlocks: 0, digs: 0 };
     this.ball = new Ball();
     this.players = [
       { x: -1.35, z: -5.6, tx: -1.35, tz: -5.6, homeX: -1.35, homeZ: -5.6, anim: null, human: humanCount > 0, label: '1P' },
@@ -644,8 +644,17 @@ export class Match {
         const easyServeHelp = !this.autoMove && this.difficulty === 'easy' && this.exp.action === 'bump'
           && landing?.kind === 'receive' && landing.who === this.exp.who
           && Math.hypot(actor.x - landing.x, actor.z - landing.z) <= .95;
+        // 도와주기(2026-10-05): 리시브·토스를 놓쳐도 난이도별 확률(D.assist)로 대신 약하게 받아 준다.
+        // 자동 이동이 들어오며 위의 쉬움 도움이 꺼져서 중급 학생 승수가 쉬움 14/40까지 떨어졌다(목표 30~36).
+        // 스파이크는 '의도한 내려치기만'(10월 2일 규칙)이라 돕지 않는다. 연습 모드는 동작을 익히는 곳이라 돕지 않는다.
+        const assist = !easyServeHelp && !this.practiceMode && ['bump', 'set'].includes(this.exp.action)
+          && Math.random() < (this.D.assist ?? 0);
         if (easyServeHelp) this.resolvePlayer({
           type: 'bump', playerIndex: this.exp.who, t: this.exp.tHit + this.D.perfect + .01,
+        });
+        else if (assist) this.resolvePlayer({
+          type: this.exp.accepts[0], playerIndex: this.exp.who, t: this.exp.tHit + this.D.perfect + .01,
+          quality: 'good', assisted: true,
         });
         else this.playerMiss(this.exp.who, 'MISS');
       }
@@ -1108,38 +1117,46 @@ export class Match {
       // 토스 차례: 두 손 토스 → 짝꿍이 공격. 내려치거나 팁을 하면 **이단 공격**(두 번째 터치로 바로 상대에게 넘기기).
       // 2026-10-05 선생님: "우리편이 수비한 뒤 내가 상대에게 이단으로 넘기는 게 되도록"
       this.expect('set', ['set', 'bump', 'spike', 'tip'], setterIndex,
-        (q, soft, g = {}) => (g.type === 'spike' || g.type === 'tip' || g.kind === 'tip') ? this.ourSecondAttack(setterIndex, q, g) : done(q),
+        (q, soft, g = {}) => (g.type === 'spike' || g.type === 'tip' || g.kind === 'tip') ? this.secondTouchAttack(setterIndex, q, g) : done(q),
         setType, { secondAttack: true });
-      if (!this.practiceMode && !this.secondAttackHinted && this.difficulty !== 'hard') {
-        this.secondAttackHinted = true;
-        this.popup('내려치면 이단 공격!', '#ffb74d', setter.x, 3.3, setter.z);
-      }
+      if (this.difficulty !== 'hard') this.hintOnce('second:' + setterIndex, '내려치면 이단 공격!', setter);
     }
     else this.computerHit(setType, setterIndex, this.practiceMode ? 1 : 0.98, done);
   }
 
-  // 이단 공격: 짝꿍이 받은 공(첫 터치)을 내가 두 번째 터치로 바로 상대 코트에 넘긴다(비치발리볼의 투터치 공격).
+  // 처음 한 번만 뜨는 안내(선수별). 연습 모드에서는 띄우지 않는다
+  hintOnce(key, text, actor) {
+    this.shownHints ??= new Set();
+    if (this.practiceMode || this.shownHints.has(key)) return;
+    this.shownHints.add(key);
+    this.popup(text, '#ffb74d', actor.x, 3.3, actor.z);
+  }
+
+  // 이단 공격: 짝꿍이 받은 공(첫 터치)을 사람 세터가 두 번째 터치로 바로 상대 코트에 넘긴다(비치발리볼의 투터치 공격).
+  // 우리 팀(who 0·1)과 대결 모드의 2P 팀(who 2·3) 모두 쓴다(2026-10-05: 처음엔 1P 쪽만 있어 2P가 내려치면 MISS였다).
   // 공은 토스를 기다리던 그 자리에서 출발하므로 위치가 튀지 않는다. 느린 포물선이라 상대가 받을 수 있다.
-  ourSecondAttack(who, quality, attack = {}) {
-    const a = this.players[who];
+  secondTouchAttack(who, quality, attack = {}) {
+    const a = this.actor(who), mine = who < 2, side = mine ? 1 : -1;
     const p = { ...(this.ball.pos(this.time) ?? this.ball.target) };
     if (!this.recordTouch(who, 'spike', p)) return;
     const tip = attack.type === 'tip' || attack.kind === 'tip';
     const aim = clamp(Number.isFinite(attack.aim) ? attack.aim : 0, -1, 1);
-    this.markAttack(tip ? 'tip' : 'spike', 'me', who);
-    if (tip) this.stats.tips++; else this.stats.spikes++;
+    this.markAttack(tip ? 'tip' : 'spike', mine ? 'me' : 'ai', who);
+    if (mine) { if (tip) this.stats.tips++; else this.stats.spikes++; }
     this.emit('sound', tip ? 'hit' : 'spike');
-    this.setPosition = null; this.chain = null;
+    this.setPosition = null;
+    if (mine) this.chain = null; else this.aiChain = null;
     a.roleLabel = null; a.readyWaiting = false; a.atSetPosition = false;
     const spread = (quality === 'perfect' ? .35 : .8) * (a.effects?.accuracyError ?? 1);
-    const tz = tip ? rand(1.4, 3.0) : rand(3.2, 6.2);
+    const tz = side * (tip ? rand(1.4, 3.0) : rand(3.2, 6.2));
     const tx = clamp(aim * 2.6 + rand(-spread, spread), -3.0, 3.0);
     const T = tip ? rand(1.4, 1.8) : (quality === 'perfect' ? rand(1.25, 1.4) : rand(1.45, 1.7));
     if (a.anim) Object.assign(a.anim, { type: tip ? 'tip' : 'spike', aim, style: tip ? (tz < 2.2 ? 'poke' : 'cobra') : undefined, planned: false });
     this.popup(tip ? '팁!' : '이단 공격!', '#ffb74d', a.x, 3.2, a.z);
     this.ball.launch(p, { x: tx, y: HIT.bump, z: tz }, T, this.time, null);
     this.ball.keepGroundInCourt();
-    this.rivalBlock = null; this.defenseRead = null;
+    this.rivalBlock = null; this.defenseRead = null; this.pendingBlock = null; this.blockZone = null;
+    if (!mine) { this.prepareOurReceive(tip ? 'tip' : 'dig'); return; }
     const receiver = Math.abs(this.ai[0].x - tx) <= Math.abs(this.ai[1].x - tx) ? 0 : 1;
     // 느린 공이라 강타보다 받기 쉽다. 정확하게(PERFECT) 치면 받기 어렵다.
     const chance = clamp(this.D.aiDig + .08 - (quality === 'perfect' ? .12 : 0), .25, .85);
@@ -1172,10 +1189,7 @@ export class Match {
       // 평소 세 번째 터치는 의도한 내려치기만 인정한다(10월 2일 규칙 유지).
       const push = !!passContact;
       this.expect('spike', push ? ['spike', 'set', 'bump'] : ['spike'], attackerIndex, done, 'spike', { push });
-      if (push && !this.pushHinted && !this.practiceMode) {
-        this.pushHinted = true;
-        this.popup('세 번째 터치! 넘기세요', '#ffb74d', attacker.x, 3.3, attacker.z);
-      }
+      if (push) this.hintOnce('push:' + attackerIndex, '세 번째 터치! 넘기세요', attacker);
       if (this.practiceMode && this.practiceSpikeBuffered?.playerIndex === attackerIndex) {
         this.exp.buffered = { ...this.practiceSpikeBuffered, t: this.exp.tHit };
         this.practiceSpikeBuffered = null;
@@ -1314,8 +1328,14 @@ export class Match {
       return;
     }
     const q = g.quality ?? (Math.abs(g.t - e.tHit) <= this.D.perfect ? 'perfect' : 'good');
-    this.stats[q]++;
-    this.popup(q === 'perfect' ? 'PERFECT!' : 'GOOD', q === 'perfect' ? '#ffd54f' : '#81c784', actor.x, 3.0, actor.z);
+    if (g.assisted) {
+      // 학생이 놓친 공을 게임이 도와 받은 것: 결과의 PERFECT·GOOD 횟수에 넣지 않고, 놓쳤다는 것을 알 수 있게 표시한다
+      this.stats.assist = (this.stats.assist ?? 0) + 1;
+      this.popup('아슬아슬!', '#b0bec5', actor.x, 3.0, actor.z);
+    } else {
+      this.stats[q]++;
+      this.popup(q === 'perfect' ? 'PERFECT!' : 'GOOD', q === 'perfect' ? '#ffd54f' : '#81c784', actor.x, 3.0, actor.z);
+    }
     const secondAttackHit = !!e.secondAttack && ['spike', 'tip'].includes(g.type);   // 토스 차례에 내려치기 = 이단 공격
     if (actor.anim) {
       if (e.action === 'spike' || secondAttackHit) {
@@ -1327,8 +1347,10 @@ export class Match {
       actor.anim.planned = false;
       if (this.autoMove && actor.approach) actor.approach.hold = this.time + .04;
     }
-    this.emit('practice-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
-    this.emit('player-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
+    if (!g.assisted) {
+      this.emit('practice-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
+      this.emit('player-action', { action: e.action, team: e.who < 2 ? 'me' : 'ai', playerIndex: e.who, quality: q });
+    }
     if (e.action === 'spike') {
       g = { ...g, timingError: g.t - e.tHit };
       if (g.kind === 'tip' || g.type === 'tip') e.next(q, true, { ...g, kind: 'tip' });
@@ -1423,7 +1445,13 @@ export class Match {
     };
     const setTarget = this.contactPoint(who, setType, this.time + setT);
     this.ball.launch(p, setTarget, setT, this.time);
-    if (setter.human) this.expect('set', ['set', 'bump'], who, () => this.aiSet(setter, r), setType);
+    if (setter.human) {
+      // 대결 모드 2P 세터도 내려치면 이단 공격(1P와 같은 규칙)
+      this.expect('set', ['set', 'bump', 'spike', 'tip'], who,
+        (q, soft, g = {}) => (g.type === 'spike' || g.type === 'tip' || g.kind === 'tip') ? this.secondTouchAttack(who, q, g) : this.aiSet(setter, r),
+        setType, { secondAttack: true });
+      if (this.difficulty !== 'hard') this.hintOnce('second:' + who, '내려치면 이단 공격!', setter);
+    }
     else { this.planAnim(setter, setType, this.ball.tHit, false, this.ball.target); this.schedule(this.ball.tHit, () => this.aiSet(setter, r)); }
   }
 
@@ -1448,7 +1476,11 @@ export class Match {
     // 네트 앞 블로커는 깊은 공 수비수로 세지 않고, 뒤의 크로스 수비 위치만 보고 공격 방향을 고른다.
     const deepDefenders = !soft && this.pendingBlock ? [this.players[this.pendingBlock.digger]] : this.players;
     const aim = this.chooseAttackAim(deepDefenders);
-    if (spiker.human) this.expect('spike', ['spike'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, { ...attack, quality: q }));
+    if (spiker.human) {
+      const push = !!passContact;   // 블록(1)+수비(2) 뒤의 세 번째 터치: 토스·리시브 동작도 팁으로 넘긴다(1P와 같은 규칙)
+      this.expect('spike', push ? ['spike', 'set', 'bump'] : ['spike'], who, (q, softHit, attack = {}) => this.aiSpike(spiker, !!softHit, { ...attack, quality: q }), 'spike', { push });
+      if (push) this.hintOnce('push:' + who, '세 번째 터치! 넘기세요', spiker);
+    }
     else {
       this.planAnim(spiker, 'spike', this.ball.tHit, true, this.ball.target);
       if (spiker.anim) spiker.anim.aim = aim;

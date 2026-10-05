@@ -9,7 +9,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { ANIM_SECONDS, COURT } from './rules.js';
-import { CONTACT_K, RigPoser } from './rig-poser.js?v=20261005a';
+import { CONTACT_K, RigPoser } from './rig-poser.js?v=20261006a';
 import { createVolleyball } from './volleyball-mesh.js';
 import { installGwangalli } from './gwangalli-scene.js';
 import { CameraDirector } from './camera-director.js';
