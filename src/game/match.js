@@ -1,6 +1,6 @@
 // 2:2 경기 진행. x=좌우, y=높이, z=앞뒤(네트 z=0).
 import { Ball } from './ball.js?v=20261006b';
-import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261006b';
+import { ANIM_SECONDS, COURT, HIT, SPIKE_Z, DIFFICULTY, SERVE } from './rules.js?v=20261006c';
 import { characterEffects, characterOrder, NEUTRAL_EFFECTS } from './character-profiles.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -352,6 +352,10 @@ export class Match {
       if (length > .001) face = { x: actor.tx + dx / length * 20, z: actor.tz + dz / length * 20 };
     }
     actor.anim = { type, t0, jump, planned: true, face };
+    if (actor.human && type === 'block') {
+      actor.anim.jump = false;
+      actor.anim.awaitingInput = true;
+    }
     if (this.autoMove && contact) {
       const offset = this.contactOffset(type, who, face);
       actor.tx = contact.x - offset.x; actor.tz = contact.z - offset.z;
@@ -682,13 +686,24 @@ export class Match {
 
   schedule(t, run) { this.jobs.push({ t, run }); }
 
-  // 자세 유지 알림은 판정 창에서만 소비한다. 캐릭터 동작·연습 카운트 등 일반 입력 부작용은 만들지 않는다.
+  // 사람의 블로킹 예약은 입력을 받은 뒤에만 점프 동작을 시작한다.
+  startBlockMotion(who) {
+    const anim = this.actor(who)?.anim;
+    if (anim?.type === 'block' && anim.awaitingInput) {
+      anim.awaitingInput = false;
+      anim.jump = true;
+      anim.t0 = this.time;
+    }
+  }
+
+  // 자세 유지 알림은 판정 창에서만 소비한다. 블로킹 외의 자세는 준비 동작을 새로 만들지 않는다.
   onHeldGesture(type, who) {
     if (this.phase !== 'rally') return;
     const b = this.blockExp;
     if (type === 'block' && b && !b.done && who === b.who
       && this.time >= b.tHit - this.D.early && this.time <= b.tHit + this.D.late) {
       const g = { type, t: Math.max(this.time, b.tHit - this.D.perfect), jump: true, playerIndex: who, held: true };
+      this.startBlockMotion(who);
       if (this.time > b.tHit) this.resolveBlock(g);
       else if (!b.buffered || b.buffered.type !== type) b.buffered = g;
       return;
@@ -727,7 +742,10 @@ export class Match {
     if (type === 'spike' && extra.attackSource) this.lastAttackAt[who] = this.time;
     if (type === 'jump') {
       this.lastJumpT[who] = this.time;
-      if (actor.anim?.planned && this.time < actor.anim.t0 + ANIM_SECONDS) actor.anim.jump = true;
+      if (actor.anim?.planned && this.time < actor.anim.t0 + ANIM_SECONDS) {
+        actor.anim.jump = true;
+        actor.anim.bodyJumpT0 = this.time;
+      }
       else actor.anim = { type: 'jump', t0: this.time };
       return;
     }
@@ -756,6 +774,7 @@ export class Match {
     const g = { type, t: this.time, jump, playerIndex: who, aim: extra.aim ?? 0, kind: extra.kind, hand: extra.hand };
     const b = this.blockExp;
     if (type === 'block' && b && !b.done && who === b.who && this.time >= b.tHit - this.D.early) {
+      this.startBlockMotion(who);
       if (this.time <= b.tHit) b.buffered = g; else this.resolveBlock(g);
       return;
     }
@@ -1563,6 +1582,7 @@ export class Match {
     if (!b || b.done) return;
     b.done = true;
     const actor = this.actor(b.who);
+    this.startBlockMotion(b.who);
     if (actor.anim) actor.anim.planned = false;
     if (!this.practiceMode && Math.abs(actor.x - b.x) > this.D.reach * 0.8) { this.popup('좌우를 맞추세요!', '#ff8a65', actor.x, 3.2, actor.z); return; }
     const q = Math.abs(g.t - b.tHit) <= this.D.perfect ? 'perfect' : 'good';

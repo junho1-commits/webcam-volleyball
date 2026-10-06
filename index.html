@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>웹캠 비치발리볼</title>
   <link rel="preload" href="assets/ui/menu/menu-bg.webp" as="image" type="image/webp">
-  <link rel="stylesheet" href="game.css?v=20261006b">
+  <link rel="stylesheet" href="game.css?v=20261006d">
   <link rel="stylesheet" href="src/highlight-reel.css">
   <link rel="stylesheet" href="src/ui/hand-cursor.css">
 </head>
@@ -39,6 +39,7 @@
     </div>
     <pre id="perf" hidden></pre>
     <div id="gpu-warning" hidden></div>
+    <div id="quality-status" class="pill" role="status" aria-live="polite" hidden></div>
 
     <div id="keys-help"></div>
 
@@ -117,7 +118,7 @@
     </div>
     <p>서브할 때는 공을 던진 손을 보고 자동으로 바뀌어요.</p>
     <div class="teacher-links"><a href="test.html" data-hand-target>동작 인식 테스트</a><a href="intro.html" data-hand-target>처음 영상</a></div>
-    <small>선생님용 키: P 일시정지 · Esc 처음으로 · Enter 다시 하기 · F2 성능</small>
+    <small>선생님용 키: P 저사양 모드 · Backspace 일시정지 · Esc 처음으로 · Enter 다시 하기</small>
     <button id="close-teacher-settings" class="menu-primary settings-done" data-hand-target>완료</button>
   </div>
 
@@ -133,10 +134,8 @@
   </div>
 
   <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
-  <script type="module" src="src/game/main.js?v=20261006b"></script>
+  <script type="module" src="src/game/main.js?v=20261006d"></script>
 </body>
 </html>
-
-
 
 

@@ -5,6 +5,11 @@ export const JUMP_HEIGHT = 0.9;
 export const COURT = { halfW: 4, halfL: 8, netH: 2.0 };
 export const SPIKE_Z = -1.0;
 export const HIT = { bump: 0.9, set: 1.5, spike: 2.45, block: 2.4 };
+// 다음 1점으로 2점 차 승리가 되는, 경기 종료 전 상황만 안내한다.
+export function isMatchPoint({ me, ai }, target, winner = null) {
+  const high = Math.max(me, ai), gap = Math.abs(me - ai);
+  return !winner && high >= target - 1 && gap >= 1 && !(high >= target && gap >= 2);
+}
 export const SERVE = {
   gravity: G, apexAboveReach: 1.0, apexTowardNet: 0.3, apexTowardHitHand: 0.15,
   jumpReach: 0.45, timingRange: 0.6, goodWindow: 0.15, lateralMiss: 0.7,

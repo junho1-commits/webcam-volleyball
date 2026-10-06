@@ -5,13 +5,13 @@ import { DuoTracker } from '../duo-tracker.js';
 import { GESTURES, ORDER } from '../gestures.js';
 import { Renderer } from '../render.js';
 import { initSound, say, setVolume, sfx, startAmbience, startMusic, stopAmbience, stopMusic } from '../sound.js';
-import { Match } from './match.js?v=20261006b';
-import { GameRenderer3D } from './draw3d.js?v=20261006b';
+import { Match } from './match.js?v=20261006c';
+import { GameRenderer3D } from './draw3d.js?v=20261006c';
 import { HandCursor, WaveDetector, handFromPose } from '../ui/hand-cursor.js';
-import { actionForCode, keyName, loadBindings } from './controls.js';
+import { actionForCode, keyName, loadBindings } from './controls.js?v=20261006d';
 import { Recorder } from '../recorder.js';
 import { HighlightReel, loadHighlightSetting, saveHighlightSetting } from '../highlight-reel.js';
-import { ANIM_SECONDS } from './rules.js';
+import { ANIM_SECONDS, isMatchPoint } from './rules.js?v=20261006c';
 import { shouldSplitVersusView, versusInputSign } from './versus-view.js';
 import { CHARACTER_PROFILES, STAT_LABELS } from './character-profiles.js';
 
@@ -119,9 +119,18 @@ function sayWhenLoaded(name, options = {}, token = voiceSession, tries = 24) {
 
 const perfEl = $('perf');
 perfEl.hidden = !params.has('perf');
-if (!/NVIDIA/i.test(court.gpuName)) {
-  $('gpu-warning').hidden = false;
-  $('gpu-warning').textContent = `⚠ 그래픽 GPU가 NVIDIA가 아닙니다: ${court.gpuName}`;
+let previousQuality = court.quality === 'low' ? 'high' : court.quality;
+let qualityStatusTimer = null;
+function toggleLowQuality() {
+  if (court.quality === 'low') court.setQuality(previousQuality);
+  else { previousQuality = court.quality; court.setQuality('low'); }
+  const low = court.quality === 'low';
+  const status = $('quality-status');
+  status.textContent = low ? '저사양 모드 켜짐 · P키로 해제' : '저사양 모드 꺼짐 · P키로 켜기';
+  status.hidden = false;
+  document.body.dataset.lowQuality = String(low);
+  clearTimeout(qualityStatusTimer);
+  qualityStatusTimer = setTimeout(() => { status.hidden = true; }, 2800);
 }
 
 // 자동 테스트용 (주소 뒤에 ?debug)
@@ -223,6 +232,42 @@ if (new URLSearchParams(location.search).has('debug')) {
     gameTime = match.time; court.draw(match, gameTime);
     $('court').dataset.autoMoveProbe = JSON.stringify(rows);
   }
+  async function idleJumpProbe() {
+    await court.ready;
+    debugContactFrozen = true; hideCeremonies(); match.presentation = null;
+    const rows = [];
+    for (const config of [{ label: 'solo' }, { label: 'coop', humanCount: 2 }, { label: 'versus', competitive: true }]) {
+      const probe = new Match({ ...config, autoMove: true });
+      for (let who = 0; who < 4; who++) {
+        const actor = probe.actor(who);
+        if (!actor.human) continue;
+        const person = court.people[who];
+        probe.planAnim(actor, 'block', 1, true);
+        const heights = [];
+        for (let frame = 0; frame < 120; frame++) {
+          person.update(actor, who < 2 ? 1 : -1, frame / 60);
+          heights.push(person.root.position.y);
+        }
+        rows.push({ mode: config.label, who, frames: heights.length,
+          airborne: heights.filter(y => y > .001).length, maxHeight: Math.max(...heights) });
+        probe.phase = 'rally'; probe.time = 2;
+        probe.planAnim(actor, 'block', 3, true);
+        probe.onGesture('jump', {}, who);
+        person.update(actor, who < 2 ? 1 : -1, 2 + ANIM_SECONDS / 2);
+        rows.at(-1).inputJumpHeight = person.root.position.y;
+        person.update(actor, who < 2 ? 1 : -1, 2 + ANIM_SECONDS + .01);
+        rows.at(-1).afterJumpHeight = person.root.position.y;
+      }
+    }
+    match.phase = 'rally'; match.clearPlans(); match.resetHomes();
+    match.planAnim(match.me, 'block', gameTime + .4, true);
+    $('message').hidden = false; $('gpu-warning').hidden = true;
+    $('message').classList.remove('serve-guide');
+    $('msg-text').textContent = '입력 대기: 준비 자세';
+    $('msg-sub').textContent = `자동 점프 ${rows.reduce((n, row) => n + row.airborne, 0)} / ${rows.reduce((n, row) => n + row.frames, 0)}프레임`;
+    court.draw(match, gameTime);
+    $('court').dataset.idleJumpProbe = JSON.stringify(rows);
+  }
   addEventListener('volleyball-debug', event => {
     const data = event.detail ?? {};
     if (!match) return;
@@ -249,6 +294,10 @@ if (new URLSearchParams(location.search).has('debug')) {
       $('msg-text').textContent = 'GOOD!'; $('msg-sub').textContent = '미리 준비한 리시브 성공!';
     } else if (data.command === 'point') {
       match.debugBallAtServeHand = false;
+      if (data.target != null) {
+        match.target = Number(data.target); match.winner = null;
+        match.score = { me: Number(data.meScore ?? 0), ai: Number(data.aiScore ?? 0) };
+      }
       match.phase = 'rally'; match.pointTo(data.team === 'ai' ? 'ai' : 'me');
     } else if (data.command === 'point-scene') {
       match.debugBallAtServeHand = false;
@@ -432,13 +481,15 @@ if (new URLSearchParams(location.search).has('debug')) {
       slowMotionProbe();
     } else if (data.command === 'auto-move-probe') {
       awaitAutoMoveProbe();
+    } else if (data.command === 'idle-jump-probe') {
+      idleJumpProbe();
     } else if (data.command === 'contact-probe') {
       debugContactFrozen = false; match.presentation = null; $('message').hidden = false;
       import('/tools/contact-probe.js').then(module => module.runContactProbe({ seconds: Number(data.seconds ?? 60) }))
         .then(result => { $('court').dataset.contactProbe = JSON.stringify(result); })
         .catch(error => { $('court').dataset.contactProbe = JSON.stringify({ error: error.message }); });
     }
-    $('court').dataset.debugState = JSON.stringify({ phase: match.phase, score: match.score, log: match.celebrationLog,
+    $('court').dataset.debugState = JSON.stringify({ phase: match.phase, score: match.score, winner: match.winner, pendingMatchPoint, log: match.celebrationLog,
       anims: [...match.players, ...match.ai].map(p => p.anim && ({ type: p.anim.type, style: p.anim.style, aim: p.anim.aim, t0: p.anim.t0,
         jump: p.anim.jump, awaitingInput: !!p.anim.awaitingInput })),
       quality: court.quality, calls: court.renderer.info.render.calls, crowd: !!court.crowdView });
@@ -454,6 +505,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   debugBridge.id = 'debug-bridge'; debugBridge.setAttribute('aria-label', 'debug bridge');
   debugBridge.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:.01;z-index:-1';
   debugBridge.addEventListener('input', () => {
+    if (!debugBridge.value.trim()) return;
     try { dispatchEvent(new CustomEvent('volleyball-debug', { detail: JSON.parse(debugBridge.value) })); }
     catch (error) { $('court').dataset.debugState = JSON.stringify({ error: error.message }); }
   });
@@ -902,7 +954,8 @@ function onEvent(type, data) {
     if (data === 'block') court.triggerEffect('block');
     if (data === 'block') court.reactCrowd('dig');
     if (data === 'spike') court.reactCrowd('spike');
-    if (pendingMatchPoint && (data === 'point' || data === 'lose')) {
+    if (pendingMatchPoint && !match?.winner && (data === 'point' || data === 'lose')) {
+      if (params.has('debug')) $('court').dataset.matchPointCalls = String(Number($('court').dataset.matchPointCalls ?? 0) + 1);
       say('match_point', { priority: 2, delay: 1.2 });
       pendingMatchPoint = false;
     }
@@ -912,7 +965,7 @@ function onEvent(type, data) {
       match.score.me = 0; match.score.ai = 0; $('score-me').textContent = '0'; $('score-ai').textContent = '0';
     } else { $('score-me').textContent = data.me; $('score-ai').textContent = data.ai; }
     const wasMatchPoint = pendingMatchPoint;
-    pendingMatchPoint = Math.max(data.me, data.ai) >= options.target - 1 && Math.abs(data.me - data.ai) >= 1;
+    pendingMatchPoint = !practice && isMatchPoint(data, match?.target ?? options.target, match?.winner);
     if (pendingMatchPoint && !wasMatchPoint) court.reactCrowd('matchPoint');
   } else if (type === 'message') {
     placeMessageFor(data?.playerIndex ?? data?.who ?? match?.exp?.who ?? null);
@@ -924,6 +977,7 @@ function onEvent(type, data) {
     void el.offsetWidth;
     el.classList.add('pop');
   } else if (type === 'over') {
+    pendingMatchPoint = false;
     const win = data.winner === 'me';
     if (win) sfx.win();
     else say('defeat', { priority: 2 });
@@ -1025,6 +1079,7 @@ function handleKeyboardAction(profileName, playerIndex, code) {
 addEventListener('keydown', e => {
   keysDown.add(e.code);
   if (e.repeat) return;
+  if (e.code === 'KeyP') { e.preventDefault(); toggleLowQuality(); return; }
   if (ceremonyFinish && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); skipPresentation(); return; }
   if (match?.phase === 'point' && !paused) match.skipReplay();
   if (e.code === 'F2') { e.preventDefault(); perfEl.hidden = !perfEl.hidden; return; }
@@ -1053,7 +1108,8 @@ addEventListener('keydown', e => {
     match.onGesture('tip', { aim: keyboardAttackAim() * actorInputSign(match.exp.who), kind: 'tip' }, match.exp.who); e.preventDefault(); return;
   }
   if (e.code === 'Escape') { goHome(); return; }
-  if (e.code === 'KeyP') {
+  if (e.code === 'Backspace') {
+    e.preventDefault();
     setPaused(!paused);
     return;
   }
@@ -1441,7 +1497,3 @@ if (params.has('debug') && params.has('measure')) {
     report.textContent = JSON.stringify({ modelsReadyMs: court.modelsReadyMs, backNumberDepths: depths });
   });
 }
-
-
-
-

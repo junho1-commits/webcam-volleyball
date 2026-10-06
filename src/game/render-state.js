@@ -24,3 +24,11 @@ export function setRenderRegion(renderer, target, x, y, width, height, clipped) 
     renderer.setScissorTest(clipped);
   }
 }
+import { ANIM_SECONDS } from './rules.js';
+
+// 입력을 기다리는 예약 동작은 준비 자세다. 직접 점프한 시간만 한 번 재생한다.
+export function waitingPose(anim, running, t) {
+  const since = anim?.bodyJumpT0 == null ? -1 : t - anim.bodyJumpT0;
+  if (since >= 0 && since < ANIM_SECONDS) return 'jump';
+  return running ? 'run' : 'ready';
+}

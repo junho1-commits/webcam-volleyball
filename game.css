@@ -39,6 +39,7 @@ body.vs-split #vs-divider { display: block; }
 .score-box.me { left: 2vw; color: #fff; background: linear-gradient(90deg, rgba(3,80,155,.92), rgba(33,150,243,.78)); }
 .score-box.ai { right: 2vw; justify-content: flex-end; color: #fff; background: linear-gradient(90deg, rgba(239,83,80,.78), rgba(145,20,31,.92)); }
 #goal { position: absolute; top: 2.5vh; left: 50%; transform: translateX(-50%); }
+#quality-status { position: fixed; z-index: 240; top: 10vh; left: 50%; transform: translateX(-50%); max-width: 90vw; text-align: center; }
 #action-cues { position: absolute; inset: 0; pointer-events: none; z-index: 13; }
 .action-cue { position: absolute; left: 50%; top: 21vh; transform: translateX(-50%); max-width: 88vw; padding: .35em .8em; border-radius: .55em; background: rgba(5,18,38,.94); border: 2px solid rgba(255,255,255,.7); font-size: clamp(24px,2.5vw,42px); font-weight: 900; text-align: center; text-shadow: 0 2px 3px #000; }
 .action-cue[hidden] { display: none; }

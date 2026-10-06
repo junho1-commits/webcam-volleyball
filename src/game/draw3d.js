@@ -15,7 +15,7 @@ import { installGwangalli } from './gwangalli-scene.js';
 import { CameraDirector } from './camera-director.js';
 import { setGhost, occludes } from './ghost.js';
 import { Crowd } from './crowd.js';
-import { setRenderRegion, updateCrowd } from './render-state.js';
+import { setRenderRegion, updateCrowd, waitingPose } from './render-state.js?v=20261006c';
 import { createSand } from './sand.js';
 import {
   FALLBACK_HEAD_HEIGHT, PLAYER_LABEL_HEAD_GAP, PLAYER_PROMPT_HEAD_GAP,
@@ -388,7 +388,7 @@ class Athlete {
     const priority = !approaching && anim && (k < 1 || persistent) && (anim.contact || anim.planned || ['dive', 'dig', 'celebrate', 'sad'].includes(anim.type));
     if (!priority && player.running) type = 'run';
     else if (!priority && (player.atSetPosition || player.movePreparing)) type = 'ready';
-    if (anim?.awaitingInput) type = player.running ? 'run' : (anim.jump ? 'jump' : 'ready');
+    if (anim?.awaitingInput) type = waitingPose(anim, player.running, t);
     const defaultYaw = facing > 0 ? 0 : Math.PI;
     const activeFace = anim && (k < 1 || persistent || anim.planned) ? anim.face : null;
     const faceYaw = activeFace
@@ -404,7 +404,7 @@ class Athlete {
     this.visualYaw += yawStep; this.lastYawT = t;
     this.root.rotation.y = this.visualYaw;
     const bodyJumpK = anim?.bodyJumpT0 == null ? k : Math.min(1, Math.max(0, (t - anim.bodyJumpT0) / ANIM));
-    const bodyJumping = anim?.bodyJumpT0 != null && t - anim.bodyJumpT0 < ANIM;
+    const bodyJumping = anim?.bodyJumpT0 != null && t >= anim.bodyJumpT0 && t - anim.bodyJumpT0 < ANIM;
     const pulse = Math.sin(Math.PI * bodyJumpK);
     const gestureSince = anim ? t - anim.t0 : -1;
     const gestureJump = type === 'celebrate' && ['highFive', 'chestBump'].includes(anim?.style)

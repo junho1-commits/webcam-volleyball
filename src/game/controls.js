@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'beach-volleyball-key-bindings-v1';
-const RESERVED_KEYS = new Set(['KeyP', 'Escape', 'F2', 'F3', 'F4', 'F8', 'Tab']);
+const RESERVED_KEYS = new Set(['KeyP', 'Backspace', 'Escape', 'F2', 'F3', 'F4', 'F8', 'Tab']);
 export const isBindableCode = code => typeof code === 'string' && /^(Key[A-Z]|Digit[0-9]|Numpad[0-9]|Arrow(Left|Right|Up|Down)|Space|Enter|Shift(Left|Right))$/.test(code) && !RESERVED_KEYS.has(code);
 
 export const DEFAULT_BINDINGS = Object.freeze({
